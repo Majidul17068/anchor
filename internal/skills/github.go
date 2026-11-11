@@ -551,6 +551,11 @@ func (s *Service) importPlugin(src, origin string) (*ImportResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("agy plugin install: %w", err)
 	}
+	if installed != "" && !dirExists(installed) {
+		// The reported path did not parse cleanly; the directory is named
+		// after the plugin, so fall back to that.
+		installed = ""
+	}
 	if installed == "" {
 		// The installer did not say where; derive it from the manifest name.
 		name := readClaudeManifest(src).Name

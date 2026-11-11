@@ -50,6 +50,11 @@ func TestPluginDirFromInstallOutput(t *testing.T) {
 	if got := PluginDirFromInstallOutput("nothing"); got != "" {
 		t.Fatalf("got %q", got)
 	}
+	// A reinstall appends a note after the path.
+	re := "          Installed to /Users/x/.gemini/config/plugins/academic-research-skills (replaced existing installation)\n"
+	if got := PluginDirFromInstallOutput(re); got != "/Users/x/.gemini/config/plugins/academic-research-skills" {
+		t.Fatalf("reinstall: got %q", got)
+	}
 }
 
 func TestAdaptPluginLinksSkillsAndFixesAgents(t *testing.T) {

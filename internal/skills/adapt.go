@@ -33,7 +33,9 @@ import (
 // and returns the directory it installed into.
 type PluginInstaller func(dir string) (installedDir string, err error)
 
-var installedToRe = regexp.MustCompile(`(?m)Installed to (.+?)\s*$`)
+// "Installed to /path" on a fresh install; "Installed to /path (replaced
+// existing installation)" on a reinstall. The path never contains " (".
+var installedToRe = regexp.MustCompile(`(?m)Installed to (.+?)(?: \([^)]*\))?\s*$`)
 
 // PluginDirFromInstallOutput finds the install location in `agy plugin
 // install` output.
