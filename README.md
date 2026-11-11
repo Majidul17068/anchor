@@ -102,6 +102,7 @@ go test ./...             # backend tests
 cd frontend && npm run typecheck && npm test
 
 wails build               # build/bin/Anchor(.app|.exe)
+scripts/build-mac.sh      # macOS: build, ad-hoc sign, install to ~/Applications
 go build ./cmd/anchorctl  # terminal companion
 ```
 
