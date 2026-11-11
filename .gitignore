@@ -1,0 +1,26 @@
+# Build output
+build/bin/
+dist/
+frontend/dist/
+frontend/wailsjs/
+
+# Dependencies
+frontend/node_modules/
+frontend/package.json.md5
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# Go
+*.test
+*.out

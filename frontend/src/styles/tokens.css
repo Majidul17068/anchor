@@ -1,0 +1,89 @@
+:root,
+[data-theme='dark'] {
+  --anchor-bg: #121316;
+  --anchor-surface: #1a1c22;
+  --anchor-surface-elevated: #232630;
+  --anchor-surface-sunken: #0c0d10;
+  --anchor-surface-hover: #2a2d39;
+  --anchor-surface-active: #313543;
+
+  --anchor-border: #2c2f3d;
+  --anchor-border-subtle: #1f222d;
+  --anchor-border-focus: #6c5ce7;
+
+  --anchor-text: #f1f2f6;
+  --anchor-text-muted: #9ba1b5;
+  --anchor-text-subtle: #676d82;
+  --anchor-text-disabled: #464a59;
+
+  /* Accent: electric indigo */
+  --anchor-accent: #6c5ce7;
+  --anchor-accent-hover: #7d6ef0;
+  --anchor-accent-active: #5b4bc7;
+  --anchor-accent-subtle: rgba(108, 92, 231, 0.15);
+  --anchor-accent-text: #ffffff;
+
+  /* Warn / Parent Source: warm amber */
+  --anchor-warn: #f5a623;
+  --anchor-warn-hover: #ffb738;
+  --anchor-warn-subtle: rgba(245, 166, 35, 0.16);
+
+  /* Ok / Success: emerald */
+  --anchor-ok: #10b981;
+  --anchor-ok-hover: #34d399;
+  --anchor-ok-subtle: rgba(16, 185, 129, 0.16);
+
+  /* Info / Shared: teal */
+  --anchor-info: #1fb6a6;
+  --anchor-info-hover: #34d3bf;
+  --anchor-info-subtle: rgba(31, 182, 166, 0.16);
+
+  /* Danger */
+  --anchor-danger: #ef4444;
+  --anchor-danger-hover: #f87171;
+  --anchor-danger-subtle: rgba(239, 68, 68, 0.16);
+
+  --anchor-ring: rgba(108, 92, 231, 0.45);
+}
+
+[data-theme='light'] {
+  --anchor-bg: #f5f6f9;
+  --anchor-surface: #ffffff;
+  --anchor-surface-elevated: #ffffff;
+  --anchor-surface-sunken: #eaedf2;
+  --anchor-surface-hover: #eff1f5;
+  --anchor-surface-active: #e3e6ed;
+
+  --anchor-border: #dcdfe6;
+  --anchor-border-subtle: #eaecee;
+  --anchor-border-focus: #6c5ce7;
+
+  --anchor-text: #1b1e28;
+  --anchor-text-muted: #5e6475;
+  --anchor-text-subtle: #8a90a2;
+  --anchor-text-disabled: #b4b9c8;
+
+  --anchor-accent: #6c5ce7;
+  --anchor-accent-hover: #5b4bc7;
+  --anchor-accent-active: #4a3ab8;
+  --anchor-accent-subtle: rgba(108, 92, 231, 0.1);
+  --anchor-accent-text: #ffffff;
+
+  --anchor-warn: #d97706;
+  --anchor-warn-hover: #b45309;
+  --anchor-warn-subtle: rgba(217, 119, 6, 0.12);
+
+  --anchor-ok: #059669;
+  --anchor-ok-hover: #047857;
+  --anchor-ok-subtle: rgba(5, 150, 105, 0.12);
+
+  --anchor-info: #0d9488;
+  --anchor-info-hover: #0f766e;
+  --anchor-info-subtle: rgba(13, 148, 136, 0.12);
+
+  --anchor-danger: #dc2626;
+  --anchor-danger-hover: #b91c1c;
+  --anchor-danger-subtle: rgba(220, 38, 38, 0.12);
+
+  --anchor-ring: rgba(108, 92, 231, 0.3);
+}

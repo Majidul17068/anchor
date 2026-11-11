@@ -1,0 +1,126 @@
+name: build
+
+# Builds Anchor for macOS, Windows and Linux.
+# * Push a version tag (v*) -> installers are attached to a GitHub Release.
+# * Run manually (Actions -> build -> Run workflow) -> installers as run artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.27"
+  NODE_VERSION: "22"
+  WAILS_VERSION: "v2.17.1"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux/amd64
+          - os: macos-latest
+            platform: darwin/universal
+          - os: windows-latest
+            platform: windows/amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install NSIS (Windows installer)
+        if: runner.os == 'Windows'
+        run: choco install nsis -y
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        env:
+          ANCHOR_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          wails build -platform linux/amd64 -tags webkit2_41 -clean \
+            -ldflags "-s -w -X main.Version=${ANCHOR_VERSION} -X github.com/Majidul17068/anchor/internal/drive.BuildClientID=${{ secrets.ANCHOR_GOOGLE_CLIENT_ID }} -X github.com/Majidul17068/anchor/internal/drive.BuildClientSecret=${{ secrets.ANCHOR_GOOGLE_CLIENT_SECRET }}"
+          go build -ldflags "-s -w -X main.Version=${ANCHOR_VERSION}" -o build/bin/anchorctl ./cmd/anchorctl
+          mkdir -p dist
+          ls -la build/bin
+          tar -C build/bin -czf dist/anchor-linux-amd64.tar.gz Anchor anchorctl
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        env:
+          ANCHOR_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          wails build -platform darwin/universal -clean \
+            -ldflags "-s -w -X main.Version=${ANCHOR_VERSION} -X github.com/Majidul17068/anchor/internal/drive.BuildClientID=${{ secrets.ANCHOR_GOOGLE_CLIENT_ID }} -X github.com/Majidul17068/anchor/internal/drive.BuildClientSecret=${{ secrets.ANCHOR_GOOGLE_CLIENT_SECRET }}"
+          GOARCH=arm64 go build -ldflags "-s -w -X main.Version=${ANCHOR_VERSION}" -o build/bin/anchorctl-arm64 ./cmd/anchorctl
+          GOARCH=amd64 go build -ldflags "-s -w -X main.Version=${ANCHOR_VERSION}" -o build/bin/anchorctl-amd64 ./cmd/anchorctl
+          lipo -create -output build/bin/anchorctl build/bin/anchorctl-arm64 build/bin/anchorctl-amd64
+          mkdir -p dist
+          APP=$(ls -d build/bin/*.app | head -1)
+          xattr -cr "$APP"
+          codesign --force --deep --sign - "$APP"
+          ditto -c -k --keepParent "$APP" dist/anchor-macos-universal.zip
+          hdiutil create -volname Anchor -srcfolder "$APP" -ov -format UDZO dist/anchor-macos-universal.dmg
+          cp build/bin/anchorctl dist/anchorctl-macos-universal
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          ANCHOR_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          wails build -platform windows/amd64 -nsis -clean \
+            -ldflags "-s -w -X main.Version=${ANCHOR_VERSION} -X github.com/Majidul17068/anchor/internal/drive.BuildClientID=${{ secrets.ANCHOR_GOOGLE_CLIENT_ID }} -X github.com/Majidul17068/anchor/internal/drive.BuildClientSecret=${{ secrets.ANCHOR_GOOGLE_CLIENT_SECRET }}"
+          go build -ldflags "-s -w -X main.Version=${ANCHOR_VERSION}" -o build/bin/anchorctl.exe ./cmd/anchorctl
+          mkdir -p dist
+          ls -la build/bin
+          cp build/bin/anchorctl.exe dist/anchorctl-windows-amd64.exe
+          cp "$(ls build/bin/*installer*.exe | head -1)" dist/anchor-windows-amd64-setup.exe
+          cp "$(ls build/bin/*.exe | grep -v -i installer | grep -v anchorctl | head -1)" dist/anchor-windows-amd64.exe
+
+      - name: Upload run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anchor-${{ runner.os }}
+          if-no-files-found: error
+          path: dist/*
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*

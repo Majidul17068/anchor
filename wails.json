@@ -1,0 +1,21 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Anchor",
+  "outputfilename": "Anchor",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "wailsjsdir": "./frontend",
+  "author": {
+    "name": "Majidul Islam",
+    "email": "majidulislam17068@gmail.com"
+  },
+  "info": {
+    "companyName": "Anchor",
+    "productName": "Anchor",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 Majidul Islam",
+    "comments": "Your Antigravity, anchored to you."
+  }
+}

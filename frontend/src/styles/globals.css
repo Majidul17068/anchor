@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@layer base {
+  * {
+    border-color: var(--anchor-border-subtle);
+    outline-color: var(--anchor-border-focus);
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: var(--anchor-bg);
+    color: var(--anchor-text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* Custom desktop scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--anchor-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--anchor-text-subtle);
+}
+
+/* Allow selection inside content zones */
+.selectable,
+.selectable * {
+  user-select: text !important;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--anchor-accent);
+  outline-offset: 1px;
+}
+
+/* Animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
