@@ -51,7 +51,11 @@ jobs:
 
       - name: Install NSIS (Windows installer)
         if: runner.os == 'Windows'
-        run: choco install nsis -y
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "C:\Program Files (x86)\NSIS\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
@@ -108,8 +112,14 @@ jobs:
           mkdir -p dist
           ls -la build/bin
           cp build/bin/anchorctl.exe dist/anchorctl-windows-amd64.exe
-          cp "$(ls build/bin/*installer*.exe | head -1)" dist/anchor-windows-amd64-setup.exe
           cp "$(ls build/bin/*.exe | grep -v -i installer | grep -v anchorctl | head -1)" dist/anchor-windows-amd64.exe
+          INSTALLER=$(ls build/bin/*installer*.exe 2>/dev/null | head -1 || true)
+          if [ -n "$INSTALLER" ]; then
+            cp "$INSTALLER" dist/anchor-windows-amd64-setup.exe
+          else
+            echo "::error::NSIS installer was not produced (makensis missing on PATH)"
+            exit 1
+          fi
 
       - name: Upload run artifact
         uses: actions/upload-artifact@v4
