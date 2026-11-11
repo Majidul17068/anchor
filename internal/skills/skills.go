@@ -41,6 +41,7 @@ type Meta struct {
 	ListingID        string               `json:"listingId,omitempty"`
 	InstalledVersion string               `json:"installedVersion,omitempty"`
 	DriveFolderID    string               `json:"driveFolderId,omitempty"`
+	Origin           string               `json:"origin,omitempty"` // e.g. github.com/owner/repo@main/skills/pdf
 	UpdatedAt        string               `json:"updatedAt"`
 	History          []model.SkillVersion `json:"history"`
 }

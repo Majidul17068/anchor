@@ -1873,6 +1873,24 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         skills.push(newSkill);
         return newSkill;
       },
+      async importFromGitHub(repo: string) {
+        const name = repo.split('/').filter(Boolean).pop() || 'github-skill';
+        const newSkill: Skill = {
+          id: createId('skill'),
+          name,
+          description: `Imported from GitHub repository ${repo}`,
+          version: '1.0.0',
+          author: repo.split('/')[0] || 'github',
+          source: 'mine',
+          triggers: [],
+          files: [{ path: 'SKILL.md', content: `---\nname: ${name}\n---\n\n# ${name}\n` }],
+          examples: [],
+          sharedWith: [],
+          updatedAt: new Date().toISOString(),
+        };
+        skills.push(newSkill);
+        return [newSkill];
+      },
     },
 
     market: {

@@ -107,6 +107,12 @@ export interface AnchorBridge {
     revoke(id: string, email: string): Promise<void>;
     shareLink(id: string): Promise<string>;
     importFromLink(link: string): Promise<Skill>;
+    /**
+     * Install every skill found in a GitHub repository (any folder holding a
+     * SKILL.md; a repo without one becomes a single skill built from its
+     * README). Accepts `owner/repo`, a repo URL, or a `/tree/<ref>/<path>` URL.
+     */
+    importFromGitHub(repo: string): Promise<Skill[]>;
   };
   market: {
     search(

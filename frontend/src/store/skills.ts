@@ -25,6 +25,7 @@ interface SkillsState {
   revokeSkill: (id: string, email: string) => Promise<void>;
   generateShareLink: (id: string) => Promise<string>;
   importFromLink: (link: string) => Promise<Skill>;
+  importFromGitHub: (repo: string) => Promise<Skill[]>;
 }
 
 export const useSkillsStore = create<SkillsState>((set, get) => ({
@@ -142,6 +143,16 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     const imported = await bridge.skills.importFromLink(link);
     await get().loadSkills();
     set({ activeSkill: imported, activeTab: 'shared' });
+    return imported;
+  },
+
+  importFromGitHub: async (repo: string) => {
+    const bridge = getBridge();
+    const imported = await bridge.skills.importFromGitHub(repo);
+    await get().loadSkills();
+    if (imported.length > 0) {
+      set({ activeSkill: imported[0], activeTab: 'acquired' });
+    }
     return imported;
   },
 }));

@@ -500,6 +500,19 @@ func (a *API) SkillsImportFromLink(link string) (*model.Skill, error) {
 	return a.skills.Install(folder.Name, "shared", folder.Props["owner"], folder.Props["version"], list, nil, "")
 }
 
+// SkillsImportFromGitHub installs every skill found in a public GitHub
+// repository. See skills.ParseGitHubRef for the accepted forms.
+func (a *API) SkillsImportFromGitHub(repo string) ([]model.Skill, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+	list, err := a.skills.ImportFromGitHub(ctx, repo)
+	out := make([]model.Skill, 0, len(list))
+	for _, sk := range list {
+		out = append(out, *sk)
+	}
+	return out, err
+}
+
 // ---------------------------------------------------------------------------
 // marketplace
 // ---------------------------------------------------------------------------
