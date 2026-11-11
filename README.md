@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/anchor-icon.png" alt="Anchor app icon" width="128" height="128">
+</p>
+
 <h1 align="center">Anchor</h1>
 
 <p align="center">
@@ -38,6 +42,11 @@ machines and in your own Google Drive.
   and **Improve**, which asks the agent to revise the skill from failures.
 - **Share** a skill with another Google account through Drive, or import one
   from a share link.
+- **Adapt from GitHub**: paste any public repository. Folders holding a
+  `SKILL.md` are installed as skills; a Claude Code plugin (such as
+  [academic-research-skills](https://github.com/imbad0202/academic-research-skills))
+  is converted by `agy plugin install`, agents, commands and hooks included; a
+  plain repository becomes one skill built from its README.
 - **Marketplace**: a public catalog of community skills (a GitHub repository,
   no server): browse, install, publish, request.
 - **Sync**: the device that created a session is its *parent source* and is
@@ -50,7 +59,7 @@ Grab the file for your OS from the **[latest release](https://github.com/Majidul
 
 | OS | File | First run |
 |----|------|-----------|
-| **macOS** (Apple silicon and Intel) | `anchor-macos-universal.dmg` | Drag to Applications, then right-click → Open the first time. If Gatekeeper blocks it: `xattr -dr com.apple.quarantine /Applications/Anchor.app` |
+| **macOS** (Apple silicon and Intel) | `anchor-macos-universal.dmg` | Drag to Applications and open. Releases built with the Apple signing secrets (see [Signing](#signing-and-notarization)) are notarized and open without warnings. An unsigned build shows *"Anchor" is damaged* or *cannot be opened*; fix it with `xattr -dr com.apple.quarantine /Applications/Anchor.app`, then right-click → Open. |
 | **Windows** | `anchor-windows-amd64-setup.exe` | Run the installer. SmartScreen → *More info → Run anyway*. A portable `anchor-windows-amd64.exe` is attached too. |
 | **Linux** | `anchor-linux-amd64.tar.gz` | `tar xzf anchor-linux-amd64.tar.gz && ./Anchor` (needs WebKitGTK 4.1, present on most desktops) |
 
@@ -108,6 +117,30 @@ go build ./cmd/anchorctl  # terminal companion
 
 Local data: `~/.anchor` (settings, device id, session metadata, transcript
 cache, logs). The CLI's own data stays in `~/.gemini`.
+
+## Signing and notarization
+
+Gatekeeper refuses an app that is not signed with a Developer ID certificate
+and notarized by Apple; that is why an unsigned build reports *"Anchor" is
+damaged*. The release workflow signs and notarizes automatically when these
+repository secrets exist (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `APPLE_CERTIFICATE_P12` | Your *Developer ID Application* certificate exported from Keychain Access as `.p12`, base64-encoded (`base64 -i cert.p12 \| pbcopy`) |
+| `APPLE_CERTIFICATE_PASSWORD` | The password chosen at export |
+| `APPLE_SIGNING_IDENTITY` | The certificate's common name, e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_ID` | The Apple ID of the developer account |
+| `APPLE_TEAM_ID` | The 10-character team id |
+| `APPLE_APP_PASSWORD` | An [app-specific password](https://support.apple.com/102654) for that Apple ID |
+
+A paid Apple Developer Program membership is required for the certificate.
+Without the secrets the workflow still builds and ad-hoc signs, and the README
+download table tells users how to open it. `scripts/build-mac.sh` honours the
+same variables from the environment for local signed builds.
+
+Windows builds are unsigned; SmartScreen shows *More info → Run anyway* until
+an Authenticode certificate is added.
 
 ## Release
 

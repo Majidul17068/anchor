@@ -82,10 +82,39 @@ jobs:
           ls -la build/bin
           tar -C build/bin -czf dist/anchor-linux-amd64.tar.gz Anchor anchorctl
 
+      # Developer ID signing + notarization run only when the Apple secrets
+      # exist. Without them the app is ad-hoc signed and Gatekeeper warns
+      # (see README "Signing and notarization").
+      - name: Import Developer ID certificate (macOS)
+        if: runner.os == 'macOS'
+        id: cert
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::APPLE_CERTIFICATE_P12 is not set; the macOS build will be ad-hoc signed and Gatekeeper will warn."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/anchor.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
       - name: Build (macOS)
         if: runner.os == 'macOS'
         env:
           ANCHOR_VERSION: ${{ steps.ver.outputs.version }}
+          SIGNED: ${{ steps.cert.outputs.signed }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           wails build -platform darwin/universal -clean \
             -ldflags "-s -w -X main.Version=${ANCHOR_VERSION} -X github.com/Majidul17068/anchor/internal/drive.BuildClientID=${{ secrets.ANCHOR_GOOGLE_CLIENT_ID }} -X github.com/Majidul17068/anchor/internal/drive.BuildClientSecret=${{ secrets.ANCHOR_GOOGLE_CLIENT_SECRET }}"
@@ -95,14 +124,41 @@ jobs:
           mkdir -p dist
           APP=$(ls -d build/bin/*.app | head -1)
           xattr -cr "$APP"
-          codesign --force --deep --sign - "$APP"
-          ditto -c -k --keepParent "$APP" dist/anchor-macos-universal.zip
+          if [ "$SIGNED" = "true" ]; then
+            codesign --force --deep --timestamp --options runtime \
+              --entitlements build/darwin/entitlements.plist \
+              --sign "$APPLE_SIGNING_IDENTITY" "$APP"
+            codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" build/bin/anchorctl
+          else
+            codesign --force --deep --sign - "$APP"
+          fi
+          codesign --verify --deep --strict "$APP"
           # Disk image with the app and an Applications shortcut for drag-and-drop install.
           STAGE=$(mktemp -d)
           ditto "$APP" "$STAGE/Anchor.app"
           ln -s /Applications "$STAGE/Applications"
           hdiutil create -volname Anchor -srcfolder "$STAGE" -ov -format UDZO dist/anchor-macos-universal.dmg
           cp build/bin/anchorctl dist/anchorctl-macos-universal
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Notarize (macOS)
+        if: runner.os == 'macOS' && steps.cert.outputs.signed == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit dist/anchor-macos-universal.dmg \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/anchor-macos-universal.dmg
+          # The ticket covers the app inside the image too; staple it so the
+          # zip works offline as well.
+          xcrun stapler staple "$APP"
+          spctl --assess --type execute --verbose=2 "$APP"
+
+      - name: Package app zip (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "$APP" dist/anchor-macos-universal.zip
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
