@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuthStore } from '../../store/auth';
 import { confirmDialog } from '../../store/confirm';
+import { planLabel } from '../../lib/plan';
 import { Avatar } from '../../components/Avatar';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -30,11 +31,11 @@ export const AccountSection: React.FC = () => {
 
         {account && (
           <Badge
-            variant={account.plan === 'google_ai_pro' ? 'accent' : 'default'}
+            variant={account.plan === 'google_ai_pro' || account.plan === 'google_ai_ultra' ? 'accent' : 'default'}
             size="xs"
             className="uppercase font-mono tracking-wider"
           >
-            {account.plan === 'google_ai_pro' ? 'Google AI Pro' : account.plan}
+            {planLabel(account.plan, account.planName)}
           </Badge>
         )}
       </div>

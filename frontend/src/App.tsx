@@ -12,6 +12,7 @@ import { SyncPage } from './features/sync/SyncPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { ConfirmHost } from './components/ConfirmDialog';
+import { PlanHost } from './components/PlanGate';
 import { useSessionStore } from './store/session';
 import { useChatStore } from './store/chat';
 import { useAuthStore } from './store/auth';
@@ -166,6 +167,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--anchor-bg)] text-[var(--anchor-text)] min-w-[1024px]">
       <ConfirmHost />
+      <PlanHost />
       {/* Native Desktop Window TitleBar */}
       <TitleBar onOpenCommandPalette={() => setCommandPaletteOpen(true)} />
 

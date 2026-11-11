@@ -3,6 +3,7 @@ import type { SyncStatus } from '../../bridge/types';
 import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { formatBytes, formatRelativeDate } from '../../lib/format';
+import { PlanLock, useFeature } from '../../components/PlanGate';
 import { Cloud, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export interface DriveStatusProps {
@@ -21,6 +22,7 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
   onDisconnect,
 }) => {
   const isConnected = Boolean(status?.driveConnected);
+  const { gate: gateSync } = useFeature('drive_sync');
 
   return (
     <div className="p-5 bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-2xl text-left space-y-4 shadow-xs">
@@ -74,14 +76,17 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
               </Button>
             </>
           ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Cloud className="w-3.5 h-3.5" />}
-              onClick={onConnect}
-            >
-              Connect Google Drive
-            </Button>
+            <>
+              <PlanLock feature="drive_sync" />
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Cloud className="w-3.5 h-3.5" />}
+                onClick={gateSync(onConnect)}
+              >
+                Connect Google Drive
+              </Button>
+            </>
           )}
         </div>
       </div>

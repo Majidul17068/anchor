@@ -7,6 +7,7 @@ import { AgentEditor } from './AgentEditor';
 import { AgentTestPanel } from './AgentTestPanel';
 import { Button } from '../../components/Button';
 import { Tabs } from '../../components/Tabs';
+import { PlanLock, useFeature } from '../../components/PlanGate';
 import { Plus } from 'lucide-react';
 
 export interface AgentsPageProps {
@@ -29,6 +30,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [testAgent, setTestAgent] = useState<Agent | null>(null);
+  const { gate } = useFeature('agents');
 
   useEffect(() => {
     loadAgents();
@@ -40,15 +42,17 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
     return ag.source === filterSource;
   });
 
-  const handleCreateNew = () => {
+  const handleCreateNew = gate(() => {
     setEditingAgent(null);
     setEditorOpen(true);
-  };
+  });
 
-  const handleEdit = (agent: Agent) => {
+  const handleEdit = gate((agent: Agent) => {
     setEditingAgent(agent);
     setEditorOpen(true);
-  };
+  });
+
+  const handleTest = gate((agent: Agent) => setTestAgent(agent));
 
   const tabs = [
     { id: 'all', label: 'All Agents', count: agents.length },
@@ -71,14 +75,17 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
             variant="pills"
           />
 
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Plus className="w-4 h-4" />}
-            onClick={handleCreateNew}
-          >
-            Create Agent
-          </Button>
+          <div className="flex items-center gap-2">
+            <PlanLock feature="agents" />
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="w-4 h-4" />}
+              onClick={handleCreateNew}
+            >
+              Create Agent
+            </Button>
+          </div>
         </div>
 
         {/* Agents Grid */}
@@ -91,7 +98,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
                 isSelected={activeAgent?.id === ag.id}
                 onSelect={() => selectAgent(ag.id)}
                 onEdit={() => handleEdit(ag)}
-                onTest={() => setTestAgent(ag)}
+                onTest={() => handleTest(ag)}
               />
             ))}
           </div>

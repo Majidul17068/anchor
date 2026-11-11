@@ -409,6 +409,9 @@ func (e *Engine) AuthStatus() *model.Account {
 		}
 		_ = e.st.SaveAccount(a)
 	}
+	if t := e.Tier(); t != nil {
+		a.PlanName, a.UpgradeURL = t.Name, t.UpgradeURI
+	}
 	return a
 }
 

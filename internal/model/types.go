@@ -21,6 +21,11 @@ type Account struct {
 	Name      string `json:"name"`
 	AvatarURL string `json:"avatarUrl,omitempty"`
 	Plan      Plan   `json:"plan"`
+	// PlanName is the tier exactly as the CLI reports it ("Google AI Pro");
+	// UpgradeURL is where it says to go for a better one. Both are display
+	// hints; Plan is what feature gates key on.
+	PlanName   string `json:"planName,omitempty"`
+	UpgradeURL string `json:"upgradeUrl,omitempty"`
 }
 
 type Device struct {

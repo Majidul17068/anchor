@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Skill, SkillFile, SkillExample } from '../../bridge/types';
 import { SkillFileTree } from './SkillFileTree';
 import { TrainPanel } from './TrainPanel';
+import { PlanGate } from '../../components/PlanGate';
 import { VersionList } from './VersionList';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
@@ -177,10 +178,12 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({ skill, onSave, onClose
 
         {/* Tab 2: Train Panel */}
         {activeTab === 'train' && (
-          <TrainPanel
-            skill={{ ...skill, files, examples }}
-            onUpdateExamples={setExamples}
-          />
+          <PlanGate feature="skill_train">
+            <TrainPanel
+              skill={{ ...skill, files, examples }}
+              onUpdateExamples={setExamples}
+            />
+          </PlanGate>
         )}
 
         {/* Tab 3: Versions List */}

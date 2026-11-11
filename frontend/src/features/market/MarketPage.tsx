@@ -12,6 +12,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Select } from '../../components/Select';
 import { Tabs } from '../../components/Tabs';
+import { PlanLock, useFeature } from '../../components/PlanGate';
 import { Search, Sparkles, Upload } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
@@ -35,6 +36,7 @@ export const MarketPage: React.FC = () => {
 
   const [selectedListingDetail, setSelectedListingDetail] = useState<Listing | null>(null);
   const [publishWizardOpen, setPublishWizardOpen] = useState(false);
+  const { gate: gatePublish } = useFeature('market_publish');
 
   useEffect(() => {
     loadCatalog();
@@ -74,11 +76,12 @@ export const MarketPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <NotificationBell />
+          <PlanLock feature="market_publish" />
           <Button
             variant="primary"
             size="sm"
             icon={<Upload className="w-3.5 h-3.5" />}
-            onClick={() => setPublishWizardOpen(true)}
+            onClick={gatePublish(() => setPublishWizardOpen(true))}
           >
             Publish a Skill
           </Button>

@@ -8,6 +8,10 @@ export interface Account {
   name: string;
   avatarUrl?: string;
   plan: Plan;
+  /** Tier name exactly as the Antigravity CLI reports it. */
+  planName?: string;
+  /** Where the CLI says to go for a higher tier. */
+  upgradeUrl?: string;
 }
 
 export interface Device {
@@ -97,6 +101,18 @@ export interface Agent {
 export interface SkillFile {
   path: string;
   content: string;
+}
+
+/** What adapting a GitHub repository produced. */
+export interface GitHubImport {
+  skills: Skill[];
+  /** Set when the repository was installed as a CLI plugin. */
+  plugin?: string;
+  /** Skills the plugin left outside skills/ that Anchor exposed. */
+  linkedSkills?: string[];
+  /** Agents whose Claude-style frontmatter was rewritten for the CLI. */
+  fixedAgents?: string[];
+  notes?: string[];
 }
 
 export interface SkillExample {
