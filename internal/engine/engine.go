@@ -383,6 +383,20 @@ func (e *Engine) AuthStatus() *model.Account {
 		a = &model.Account{Email: email, Name: displayName(email), Plan: model.PlanUnknown}
 		_ = e.st.SaveAccount(a)
 	}
+	// The display name and picture come from the OpenID token Google issued
+	// at sign-in, not from the email's local part.
+	if p, err := readGoogleProfile(); err == nil && strings.EqualFold(p.Email, email) {
+		changed := false
+		if p.Name != "" && a.Name != p.Name {
+			a.Name, changed = p.Name, true
+		}
+		if p.Picture != "" && a.AvatarURL != p.Picture {
+			a.AvatarURL, changed = p.Picture, true
+		}
+		if changed {
+			_ = e.st.SaveAccount(a)
+		}
+	}
 	if a.Plan == model.PlanUnknown {
 		// The subscription tier only comes with a session; probe once so the
 		// badge is right from the first screen.
@@ -436,21 +450,25 @@ func (e *Engine) Login() (*model.Account, error) {
 	return a, nil
 }
 
+// Logout signs out of Google everywhere Anchor can reach: the running CLI
+// processes are closed, the CLI's credential files are cleared, and Anchor's
+// own account record is removed. Clearing only the local record (as this
+// once did) left the CLI signed in, so the next status check simply read the
+// account straight back.
 func (e *Engine) Logout() error {
-	p, err := e.Proc("")
-	if err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := p.client.Call(ctx, "logout", nil, nil); err != nil {
-			_ = p.client.Call(ctx, "auth/logout", nil, nil)
-		}
-	}
+	// Close every CLI process first so none of them rewrites the credential
+	// files after they have been cleared.
 	e.Shutdown()
+	err := clearCLICredentials()
 	e.mu.Lock()
 	e.tier = nil
 	e.models = nil
+	e.probed = false
 	e.mu.Unlock()
-	return e.st.SaveAccount(nil)
+	if err2 := e.st.SaveAccount(nil); err == nil {
+		err = err2
+	}
+	return err
 }
 
 // ---------------------------------------------------------------------------
