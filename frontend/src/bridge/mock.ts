@@ -1889,7 +1889,7 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
           updatedAt: new Date().toISOString(),
         };
         skills.push(newSkill);
-        return [newSkill];
+        return { skills: [newSkill] };
       },
     },
 

@@ -65,6 +65,20 @@ func NewAPI(version string, logger *log.Logger) *API {
 		return "me"
 	}
 	a.skills = skills.New(st, a.eng, author)
+	// A plugin repository is converted by the CLI's own installer.
+	a.skills.SetPluginInstaller(func(dir string) (string, error) {
+		bin, ok := a.loc.Find()
+		if !ok {
+			return "", errors.New("the Antigravity CLI (agy) is not installed")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		out, err := cli.Run(ctx, bin, "plugin", "install", dir)
+		if err != nil {
+			return "", err
+		}
+		return skills.PluginDirFromInstallOutput(out), nil
+	})
 	a.agents = agents.New(a.loc)
 	a.drive = drive.New(st, a.openURL, logf)
 	a.sync = anchorsync.New(st, a.drive, a.emit, logf)
@@ -500,16 +514,34 @@ func (a *API) SkillsImportFromLink(link string) (*model.Skill, error) {
 	return a.skills.Install(folder.Name, "shared", folder.Props["owner"], folder.Props["version"], list, nil, "")
 }
 
-// SkillsImportFromGitHub installs every skill found in a public GitHub
-// repository. See skills.ParseGitHubRef for the accepted forms.
-func (a *API) SkillsImportFromGitHub(repo string) ([]model.Skill, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+// GitHubImport mirrors frontend/src/bridge/types.ts GitHubImport.
+type GitHubImport struct {
+	Skills       []model.Skill `json:"skills"`
+	Plugin       string        `json:"plugin,omitempty"`
+	LinkedSkills []string      `json:"linkedSkills,omitempty"`
+	FixedAgents  []string      `json:"fixedAgents,omitempty"`
+	Notes        []string      `json:"notes,omitempty"`
+}
+
+// SkillsImportFromGitHub adapts a public GitHub repository: a plugin goes
+// through `agy plugin install` and is then fixed up for the CLI; loose
+// SKILL.md folders become acquired skills. See skills.ParseGitHubRef for
+// the accepted forms.
+func (a *API) SkillsImportFromGitHub(repo string) (GitHubImport, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	list, err := a.skills.ImportFromGitHub(ctx, repo)
-	out := make([]model.Skill, 0, len(list))
-	for _, sk := range list {
-		out = append(out, *sk)
+	res, err := a.skills.ImportFromGitHub(ctx, repo)
+	out := GitHubImport{Skills: []model.Skill{}}
+	if res == nil {
+		return out, err
 	}
+	for _, sk := range res.Skills {
+		out.Skills = append(out.Skills, *sk)
+	}
+	out.Plugin = res.Plugin
+	out.LinkedSkills = res.Adapt.LinkedSkills
+	out.FixedAgents = res.Adapt.FixedAgents
+	out.Notes = res.Adapt.Notes
 	return out, err
 }
 

@@ -50,6 +50,8 @@ type Service struct {
 	st     *store.Store
 	runner Runner
 	author func() string
+	// pluginInstall runs `agy plugin install`; nil until the CLI is wired in.
+	pluginInstall PluginInstaller
 }
 
 func New(st *store.Store, runner Runner, author func() string) *Service {
@@ -181,6 +183,12 @@ func RenderFrontmatter(fm Frontmatter, body string) string {
 }
 
 func readFiles(dir string) ([]model.SkillFile, error) {
+	// A plugin adapted from a Claude Code repository links skills/<name> to
+	// a folder elsewhere in the plugin; WalkDir treats a symlinked root as a
+	// file, so resolve it first.
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
 	var files []model.SkillFile
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -288,8 +296,16 @@ func (s *Service) List() ([]model.Skill, error) {
 	addDir := func(root, source, plugin string) {
 		entries, _ := os.ReadDir(root)
 		for _, e := range entries {
-			if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			if strings.HasPrefix(e.Name(), ".") {
 				continue
+			}
+			// ReadDir reports a symlink as a symlink, not a directory; a
+			// plugin adapted from a Claude Code repository exposes its
+			// skills through exactly such links (see AdaptPlugin).
+			if !e.IsDir() {
+				if st, err := os.Stat(filepath.Join(root, e.Name())); err != nil || !st.IsDir() {
+					continue
+				}
 			}
 			if _, err := os.Stat(filepath.Join(root, e.Name(), "SKILL.md")); err != nil {
 				continue

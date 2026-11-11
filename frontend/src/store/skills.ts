@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Share, Skill } from '../bridge/types';
+import type { GitHubImport, Share, Skill } from '../bridge/types';
 import { getBridge } from '../bridge';
 
 export type SkillTab = 'mine' | 'acquired' | 'shared' | 'plugins' | 'builtin';
@@ -25,7 +25,7 @@ interface SkillsState {
   revokeSkill: (id: string, email: string) => Promise<void>;
   generateShareLink: (id: string) => Promise<string>;
   importFromLink: (link: string) => Promise<Skill>;
-  importFromGitHub: (repo: string) => Promise<Skill[]>;
+  importFromGitHub: (repo: string) => Promise<GitHubImport>;
 }
 
 export const useSkillsStore = create<SkillsState>((set, get) => ({
@@ -148,11 +148,12 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
 
   importFromGitHub: async (repo: string) => {
     const bridge = getBridge();
-    const imported = await bridge.skills.importFromGitHub(repo);
+    const result = await bridge.skills.importFromGitHub(repo);
     await get().loadSkills();
-    if (imported.length > 0) {
-      set({ activeSkill: imported[0], activeTab: 'acquired' });
+    const first = result.skills[0];
+    if (first) {
+      set({ activeSkill: first, activeTab: result.plugin ? 'plugins' : 'acquired' });
     }
-    return imported;
+    return result;
   },
 }));

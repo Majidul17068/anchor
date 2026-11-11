@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,22 +21,31 @@ import (
 	"unicode/utf8"
 
 	"github.com/Majidul17068/anchor/internal/model"
+	"github.com/Majidul17068/anchor/internal/paths"
 )
 
-// Importing skills from GitHub.
+// Adapting skills from GitHub.
 //
-// A skill is any folder holding a SKILL.md, which is also how the Antigravity
-// CLI discovers them. A repository may hold one skill at its root, many under
-// subfolders (anthropics/skills style), or none at all; in the last case the
-// README becomes the SKILL.md so that "any kind of GitHub repo" yields
-// something the CLI can load. Only public repositories are reachable: the
-// archive is fetched anonymously from codeload.github.com, no git required.
+// Three shapes of repository are handled, in this order:
+//
+//  1. A plugin (Claude Code's .claude-plugin/plugin.json, or the CLI's own
+//     plugin.json): handed to `agy plugin install`, which converts commands,
+//     hooks and agents, then post-processed by AdaptPlugin so the skills it
+//     leaves outside skills/ are loaded and its agents parse.
+//  2. Loose skills: every folder holding a SKILL.md is installed as an
+//     acquired skill.
+//  3. Anything else: the README becomes a SKILL.md so the repository is still
+//     usable as reference material.
+//
+// Only public repositories are reachable: the archive is fetched anonymously
+// from codeload.github.com, no git required.
 
 const (
-	// Decompressed bytes we are willing to walk before calling the archive
-	// hostile. Text files beyond maxFileBytes are skipped, not read.
+	// Decompressed bytes we are willing to extract before calling the
+	// archive hostile.
 	maxArchiveBytes = 512 << 20
-	maxBundleFiles  = 200
+	maxEntryBytes   = 32 << 20
+	maxBundleFiles  = 2000
 	maxSynthDocs    = 50
 )
 
@@ -116,58 +128,111 @@ func ParseGitHubRef(in string) (GitHubRef, error) {
 	return ref, nil
 }
 
-// bundle is one importable skill found in an archive.
+// extractTarball writes a GitHub source archive into dest, dropping the
+// "<repo>-<sha>/" prefix. Only regular files are written; symlinks and hard
+// links are never followed, paths that escape dest are rejected, and the
+// executable bit is kept so hook scripts still run.
+func extractTarball(r io.Reader, dest string) error {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return fmt.Errorf("not a gzip archive: %w", err)
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	var total int64
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("reading archive: %w", err)
+		}
+		total += hdr.Size
+		if total > maxArchiveBytes {
+			return errors.New("repository is too large to import")
+		}
+		if hdr.Typeflag != tar.TypeReg || hdr.Size > maxEntryBytes {
+			continue
+		}
+		rel := stripRoot(hdr.Name)
+		if rel == "" {
+			continue
+		}
+		full := filepath.Join(dest, filepath.FromSlash(rel))
+		if !strings.HasPrefix(full, filepath.Clean(dest)+string(filepath.Separator)) {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			return err
+		}
+		mode := os.FileMode(hdr.Mode) & 0o777
+		if mode == 0 {
+			mode = 0o644
+		}
+		mode |= 0o600
+		f, err := os.OpenFile(full, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(f, io.LimitReader(tr, maxEntryBytes))
+		f.Close()
+		if err != nil {
+			return err
+		}
+	}
+}
+
+// readTextFiles walks an extracted repository and returns its UTF-8 files
+// under maxFileBytes, keyed by slash path relative to root. Hidden, vendored
+// and build folders are skipped.
+func readTextFiles(root, subdir string) (map[string]string, error) {
+	files := map[string]string{}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, p)
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		if skipPath(rel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() || d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		if !insideSubdir(rel, subdir) {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() > maxFileBytes {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil || !utf8.Valid(b) {
+			return nil
+		}
+		files[rel] = string(b)
+		return nil
+	})
+	return files, err
+}
+
+// bundle is one importable skill found in a repository.
 type bundle struct {
 	Dir   string // relative to the repository root; "" for the root itself
 	Files []model.SkillFile
 }
 
-// bundlesFromTarball walks a GitHub source archive and returns every folder
-// that holds a SKILL.md. If none exists, `readme` carries the README text
-// (if any) so the caller can synthesise a skill, and `docs` the other
-// markdown files under the subtree.
-func bundlesFromTarball(r io.Reader, subdir string) (bundles []bundle, readme string, docs []model.SkillFile, err error) {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("not a gzip archive: %w", err)
-	}
-	defer gz.Close()
-	tr := tar.NewReader(gz)
-
-	files := map[string]string{}
-	var total int64
-	for {
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("reading archive: %w", err)
-		}
-		total += hdr.Size
-		if total > maxArchiveBytes {
-			return nil, "", nil, errors.New("repository is too large to import")
-		}
-		if hdr.Typeflag != tar.TypeReg {
-			continue // directories, symlinks, hard links: never followed
-		}
-		rel := stripRoot(hdr.Name)
-		if rel == "" || !insideSubdir(rel, subdir) || skipPath(rel) {
-			continue
-		}
-		if hdr.Size > maxFileBytes {
-			continue
-		}
-		b, err := io.ReadAll(io.LimitReader(tr, maxFileBytes+1))
-		if err != nil {
-			return nil, "", nil, err
-		}
-		if !utf8.Valid(b) {
-			continue
-		}
-		files[rel] = string(b)
-	}
-
+// bundlesFromFiles groups text files by the folders that hold a SKILL.md. If
+// none exists, `readme` carries the README text (if any) so the caller can
+// synthesise a skill, and `docs` the other markdown files under the subtree.
+func bundlesFromFiles(files map[string]string, subdir string) (bundles []bundle, readme string, docs []model.SkillFile) {
 	// Skill folders, outermost first so nested ones can be excluded.
 	var dirs []string
 	for p := range files {
@@ -218,7 +283,7 @@ func bundlesFromTarball(r io.Reader, subdir string) (bundles []bundle, readme st
 		bundles = append(bundles, bundle{Dir: dir, Files: list})
 	}
 	if len(bundles) > 0 {
-		return bundles, "", nil, nil
+		return bundles, "", nil
 	}
 
 	// Nothing declared itself a skill: hand back the README and markdown.
@@ -247,7 +312,7 @@ func bundlesFromTarball(r io.Reader, subdir string) (bundles []bundle, readme st
 			docs = append(docs, model.SkillFile{Path: rel, Content: files[p]})
 		}
 	}
-	return nil, readme, docs, nil
+	return nil, readme, docs
 }
 
 // stripRoot drops the "<repo>-<sha>/" prefix GitHub puts on every entry and
@@ -326,7 +391,6 @@ func synthesiseSkill(name, origin, readme string, docs []model.SkillFile) []mode
 // skipping headings, badges and HTML, capped for a one-line description.
 func firstParagraph(md string) string {
 	var cur []string
-	flush := func() string { return strings.Join(cur, " ") }
 	for _, line := range strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n") {
 		t := strings.TrimSpace(line)
 		if t == "" {
@@ -343,16 +407,28 @@ func firstParagraph(md string) string {
 		}
 		cur = append(cur, t)
 	}
-	s := flush()
+	s := strings.Join(cur, " ")
 	if len(s) > 220 {
 		s = s[:217] + "..."
 	}
 	return s
 }
 
-// ImportFromGitHub downloads a public repository and installs every skill it
-// holds under ~/.gemini/config/skills as "acquired" skills.
-func (s *Service) ImportFromGitHub(ctx context.Context, input string) ([]*model.Skill, error) {
+// SetPluginInstaller wires the CLI's `plugin install` in; without it, plugin
+// repositories fall back to loose-skill import.
+func (s *Service) SetPluginInstaller(f PluginInstaller) { s.pluginInstall = f }
+
+// ImportResult is what one GitHub import produced.
+type ImportResult struct {
+	Skills []*model.Skill
+	// Plugin is set when the repository was installed as a plugin.
+	Plugin string
+	Adapt  AdaptReport
+}
+
+// ImportFromGitHub downloads a public repository and installs what it holds:
+// a plugin through the CLI, or loose skills under ~/.gemini/config/skills.
+func (s *Service) ImportFromGitHub(ctx context.Context, input string) (*ImportResult, error) {
 	ref, err := ParseGitHubRef(input)
 	if err != nil {
 		return nil, err
@@ -395,15 +471,34 @@ func (s *Service) ImportFromGitHub(ctx context.Context, input string) ([]*model.
 	}
 	defer body.Close()
 
-	bundles, readme, docs, err := bundlesFromTarball(io.LimitReader(body, 256<<20), ref.Subdir)
+	// The CLI's installer wants a directory, and a plugin keeps hook scripts
+	// and assets that are not text, so everything is extracted to disk.
+	tmp, err := os.MkdirTemp("", "anchor-adapt-*")
 	if err != nil {
 		return nil, err
 	}
+	defer os.RemoveAll(tmp)
+	if err := extractTarball(io.LimitReader(body, 256<<20), tmp); err != nil {
+		return nil, err
+	}
 	origin := ref.String()
+	root := tmp
+	if ref.Subdir != "" {
+		root = filepath.Join(tmp, filepath.FromSlash(ref.Subdir))
+	}
 
+	if s.pluginInstall != nil && IsPluginSource(root) {
+		return s.importPlugin(root, origin)
+	}
+
+	files, err := readTextFiles(tmp, ref.Subdir)
+	if err != nil {
+		return nil, err
+	}
+	bundles, readme, docs := bundlesFromFiles(files, ref.Subdir)
 	if len(bundles) == 0 {
 		if readme == "" && len(docs) == 0 {
-			return nil, fmt.Errorf("%s has no SKILL.md and no README to build one from", origin)
+			return nil, fmt.Errorf("%s has no plugin manifest, no SKILL.md and no README to build one from", origin)
 		}
 		name := ref.Repo
 		if ref.Subdir != "" {
@@ -412,7 +507,7 @@ func (s *Service) ImportFromGitHub(ctx context.Context, input string) ([]*model.
 		bundles = []bundle{{Dir: ref.Subdir, Files: synthesiseSkill(name, origin, readme, docs)}}
 	}
 
-	var out []*model.Skill
+	res := &ImportResult{}
 	for _, b := range bundles {
 		var fm Frontmatter
 		for _, f := range b.Files {
@@ -435,7 +530,7 @@ func (s *Service) ImportFromGitHub(ctx context.Context, input string) ([]*model.
 		}
 		sk, err := s.Install(name, "acquired", author, fm.Version, b.Files, nil, "")
 		if err != nil {
-			return out, fmt.Errorf("installing %q: %w", name, err)
+			return res, fmt.Errorf("installing %q: %w", name, err)
 		}
 		m := s.meta(Slug(name))
 		m.Origin = origin
@@ -443,9 +538,60 @@ func (s *Service) ImportFromGitHub(ctx context.Context, input string) ([]*model.
 			m.Origin = origin + "/" + b.Dir
 		}
 		_ = s.saveMeta(m)
-		out = append(out, sk)
+		res.Skills = append(res.Skills, sk)
 	}
-	return out, nil
+	return res, nil
+}
+
+func (s *Service) importPlugin(src, origin string) (*ImportResult, error) {
+	installed, err := s.pluginInstall(src)
+	if err != nil {
+		return nil, fmt.Errorf("agy plugin install: %w", err)
+	}
+	if installed == "" {
+		// The installer did not say where; derive it from the manifest name.
+		name := readClaudeManifest(src).Name
+		if name == "" {
+			var m struct {
+				Name string `json:"name"`
+			}
+			if b, err := os.ReadFile(filepath.Join(src, "plugin.json")); err == nil {
+				_ = json.Unmarshal(b, &m)
+			}
+			name = m.Name
+		}
+		if name == "" {
+			return nil, errors.New("the CLI installed the plugin but did not report where")
+		}
+		installed = filepath.Join(paths.PluginsDir(), name)
+		if !dirExists(installed) {
+			return nil, fmt.Errorf("the CLI installed the plugin but %s does not exist", installed)
+		}
+	}
+	rep, err := AdaptPlugin(installed, src)
+	if err != nil {
+		return nil, err
+	}
+	pluginName := filepath.Base(installed)
+	res := &ImportResult{Plugin: pluginName, Adapt: rep}
+	all, err := s.List()
+	if err != nil {
+		return res, err
+	}
+	prefix := idPlugin(pluginName, "")
+	for i := range all {
+		if all[i].Source == "plugin" && strings.HasPrefix(all[i].ID, prefix) {
+			sk := all[i]
+			res.Skills = append(res.Skills, &sk)
+		}
+	}
+	_ = origin
+	return res, nil
+}
+
+func dirExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
 }
 
 func defaultBranch(ctx context.Context, client *http.Client, ref GitHubRef) string {

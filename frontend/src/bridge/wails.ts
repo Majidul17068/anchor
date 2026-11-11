@@ -11,6 +11,7 @@ import type {
   ChatEvent,
   Conflict,
   Device,
+  GitHubImport,
   Listing,
   Model,
   Notification,
@@ -215,7 +216,8 @@ export function createWailsBridge(): AnchorBridge {
       revoke: (id, email) => call('SkillsRevoke', id, email),
       shareLink: (id) => call<string>('SkillsShareLink', id),
       importFromLink: (link) => call<Skill>('SkillsImportFromLink', link),
-      importFromGitHub: (repo) => call<Skill[]>('SkillsImportFromGitHub', repo).then((s) => s ?? []),
+      importFromGitHub: (repo) =>
+        call<GitHubImport>('SkillsImportFromGitHub', repo).then((r) => ({ ...r, skills: r?.skills ?? [] })),
     },
 
     market: {

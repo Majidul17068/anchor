@@ -98,7 +98,7 @@ triggers: [domain, custom]
             icon={<Download className="w-3.5 h-3.5" />}
             onClick={() => setImportDialogOpen(true)}
           >
-            Import from Link
+            Adapt Skill
           </Button>
           <Button
             variant="primary"

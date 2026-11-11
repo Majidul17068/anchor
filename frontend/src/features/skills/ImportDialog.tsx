@@ -35,12 +35,20 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose }) => 
     setResult(null);
     try {
       if (isGitHub) {
-        const skills = await importFromGitHub(v);
-        setResult(
-          skills.length === 1
-            ? `Installed "${skills[0].name}".`
-            : `Installed ${skills.length} skills: ${skills.map((s) => s.name).join(', ')}.`
-        );
+        const r = await importFromGitHub(v);
+        const names = r.skills.map((s) => s.name);
+        const parts: string[] = [];
+        if (r.plugin) {
+          parts.push(`Installed plugin "${r.plugin}" through the Antigravity CLI with ${names.length} skill${names.length === 1 ? '' : 's'}.`);
+          if (r.linkedSkills?.length) parts.push(`Exposed to the CLI: ${r.linkedSkills.join(', ')}.`);
+          if (r.fixedAgents?.length) parts.push(`Adapted agent frontmatter: ${r.fixedAgents.join(', ')}.`);
+        } else if (names.length === 1) {
+          parts.push(`Installed "${names[0]}".`);
+        } else {
+          parts.push(`Installed ${names.length} skills: ${names.join(', ')}.`);
+        }
+        if (r.notes?.length) parts.push(r.notes.join(' '));
+        setResult(parts.join(' '));
         setLink('');
       } else {
         await importFromLink(v);
@@ -63,8 +71,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose }) => 
     <Dialog
       open={open}
       onClose={close}
-      title="Import Skill"
-      description="Paste a GitHub repository or an Anchor share link. Every folder in the repository that holds a SKILL.md is installed as a skill; a repository without one becomes a single skill built from its README."
+      title="Adapt Skill"
+      description="Paste a GitHub repository or an Anchor share link. A Claude Code or Antigravity plugin is installed through the CLI and fixed up; every folder holding a SKILL.md becomes a skill; a repository with neither becomes one skill built from its README."
       footer={
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={close}>
@@ -78,7 +86,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose }) => 
             icon={isGitHub ? <Github className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
             onClick={handleImport}
           >
-            {isGitHub ? 'Import from GitHub' : 'Import Skill'}
+            {isGitHub ? 'Adapt from GitHub' : 'Import Skill'}
           </Button>
         </div>
       }
@@ -100,7 +108,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose }) => 
           <p className="text-xs text-[var(--anchor-ok)] leading-relaxed">{result}</p>
         )}
         <p className="text-xs text-[var(--anchor-text-muted)] leading-relaxed">
-          Public repositories only. Installed skills land in <span className="font-mono">~/.gemini/config/skills</span>, where the Antigravity CLI discovers them; re-importing the same repository updates them in place and keeps the previous version in history.
+          Public repositories only. Plugins land in <span className="font-mono">~/.gemini/config/plugins</span> and skills in <span className="font-mono">~/.gemini/config/skills</span>, where the Antigravity CLI discovers them; adapting the same repository again updates it in place.
         </p>
       </div>
     </Dialog>
