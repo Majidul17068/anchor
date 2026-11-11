@@ -459,8 +459,18 @@ func (e *Engine) Login() (*model.Account, error) {
 // once did) left the CLI signed in, so the next status check simply read the
 // account straight back.
 func (e *Engine) Logout() error {
-	// Close every CLI process first so none of them rewrites the credential
-	// files after they have been cleared.
+	// The CLI advertises an auth.logout capability on initialize; ask it
+	// first so it can drop whatever it caches in memory. Best effort: the
+	// files below are what actually hold the sign-in.
+	if p, err := e.Proc(""); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := p.client.Call(ctx, "auth/logout", nil, nil); err != nil {
+			_ = p.client.Call(ctx, "logout", nil, nil)
+		}
+		cancel()
+	}
+	// Close every CLI process so none of them rewrites the credential files
+	// after they have been cleared.
 	e.Shutdown()
 	err := clearCLICredentials()
 	e.mu.Lock()
