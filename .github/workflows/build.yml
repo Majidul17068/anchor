@@ -97,7 +97,11 @@ jobs:
           xattr -cr "$APP"
           codesign --force --deep --sign - "$APP"
           ditto -c -k --keepParent "$APP" dist/anchor-macos-universal.zip
-          hdiutil create -volname Anchor -srcfolder "$APP" -ov -format UDZO dist/anchor-macos-universal.dmg
+          # Disk image with the app and an Applications shortcut for drag-and-drop install.
+          STAGE=$(mktemp -d)
+          ditto "$APP" "$STAGE/Anchor.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname Anchor -srcfolder "$STAGE" -ov -format UDZO dist/anchor-macos-universal.dmg
           cp build/bin/anchorctl dist/anchorctl-macos-universal
 
       - name: Build (Windows)
