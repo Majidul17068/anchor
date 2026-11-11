@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Session } from '../../bridge/types';
 import { useSessionStore } from '../../store/session';
+import { confirmDialog } from '../../store/confirm';
 import { formatRelativeDate } from '../../lib/format';
 import { Badge } from '../../components/Badge';
 import {
@@ -36,11 +37,15 @@ export const SessionRow: React.FC<SessionRowProps> = ({
     updateSession(session.id, { pinned: !session.pinned });
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Delete session "${session.title}"?`)) {
-      deleteSession(session.id);
-    }
+    const ok = await confirmDialog({
+      title: `Delete session "${session.title}"?`,
+      message: 'The conversation is removed from this device and from the Antigravity CLI.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (ok) deleteSession(session.id);
   };
 
   const getSyncDot = () => {

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useMarketStore } from '../../store/market';
+import { confirmDialog } from '../../store/confirm';
 import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { formatNumberCompact, formatRelativeDate } from '../../lib/format';
@@ -69,10 +70,14 @@ export const MyMarketPanel: React.FC = () => {
                     size="xs"
                     variant="outline"
                     icon={<Trash2 className="w-3.5 h-3.5 text-[var(--anchor-danger)]" />}
-                    onClick={() => {
-                      if (confirm(`Unpublish listing "${l.name}" from Anchor Marketplace?`)) {
-                        unpublishListing(l.id);
-                      }
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: `Unpublish "${l.name}"?`,
+                        message: 'The listing is removed from the Anchor Marketplace. Installed copies are unaffected.',
+                        confirmLabel: 'Unpublish',
+                        danger: true,
+                      });
+                      if (ok) unpublishListing(l.id);
                     }}
                   >
                     Unpublish

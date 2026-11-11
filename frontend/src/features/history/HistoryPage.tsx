@@ -3,6 +3,7 @@ import type { Session, Device, Agent, Project } from '../../bridge/types';
 import { getBridge } from '../../bridge';
 import { useSessionStore } from '../../store/session';
 import { useSyncStore } from '../../store/sync';
+import { confirmDialog } from '../../store/confirm';
 import { HistoryFilters } from './HistoryFilters';
 import { HistoryRow } from './HistoryRow';
 import { EmptyState } from '../../components/EmptyState';
@@ -88,7 +89,13 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onOpenSession }) => {
   };
 
   const handleDelete = async (s: Session) => {
-    if (confirm(`Delete session "${s.title}" from local device?`)) {
+    const ok = await confirmDialog({
+      title: `Delete session "${s.title}"?`,
+      message: 'Removed from this device and from the Antigravity CLI.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (ok) {
       await deleteSession(s.id);
       await runSearch();
       setToastMessage(`Deleted "${s.title}"`);

@@ -2,6 +2,7 @@ import React from 'react';
 import type { SkillFile } from '../../bridge/types';
 import { File, FileCode, FileText, Plus, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/cn';
+import { confirmDialog, promptDialog } from '../../store/confirm';
 
 export interface SkillFileTreeProps {
   files: SkillFile[];
@@ -18,8 +19,13 @@ export const SkillFileTree: React.FC<SkillFileTreeProps> = ({
   onAddFile,
   onDeleteFile,
 }) => {
-  const handleCreate = () => {
-    const filename = prompt('Enter new file path (e.g. references/guide.md, fixtures/mock.json):');
+  const handleCreate = async () => {
+    const filename = await promptDialog({
+      title: 'New file',
+      label: 'Path inside the skill',
+      placeholder: 'references/guide.md',
+      confirmLabel: 'Create',
+    });
     if (filename && filename.trim()) {
       onAddFile(filename.trim());
     }
@@ -71,11 +77,14 @@ export const SkillFileTree: React.FC<SkillFileTreeProps> = ({
 
               {!isSkillMd && (
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete file "${file.path}"?`)) {
-                      onDeleteFile(file.path);
-                    }
+                    const ok = await confirmDialog({
+                      title: `Delete "${file.path}"?`,
+                      confirmLabel: 'Delete',
+                      danger: true,
+                    });
+                    if (ok) onDeleteFile(file.path);
                   }}
                   aria-label={`Delete ${file.path}`}
                   className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--anchor-text-subtle)] hover:text-[var(--anchor-danger)] transition-opacity"

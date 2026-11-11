@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuthStore } from '../../store/auth';
+import { confirmDialog } from '../../store/confirm';
 import { Avatar } from '../../components/Avatar';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -56,10 +57,14 @@ export const AccountSection: React.FC = () => {
             size="sm"
             variant="outline"
             icon={<LogOut className="w-3.5 h-3.5" />}
-            onClick={() => {
-              if (confirm('Sign out of your Google account?')) {
-                logout();
-              }
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: 'Sign out of Google?',
+                message: 'Anchor and the Antigravity CLI both forget this account. You will need to sign in again to chat.',
+                confirmLabel: 'Sign out',
+                danger: true,
+              });
+              if (ok) logout();
             }}
           >
             Sign Out

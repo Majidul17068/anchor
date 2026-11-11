@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSettingsStore } from '../../store/settings';
 import { useSyncStore } from '../../store/sync';
+import { confirmDialog } from '../../store/confirm';
 import { Button } from '../../components/Button';
 import { AlertTriangle, CloudOff, Trash2 } from 'lucide-react';
 
@@ -14,14 +15,26 @@ export const DangerZone: React.FC<DangerZoneProps> = ({ onShowToast }) => {
   const syncStatus = useSyncStore((s) => s.status);
 
   const handleClearCache = async () => {
-    if (confirm('Clear local caches and session selection states? (Google Drive data will remain safe)')) {
+    const ok = await confirmDialog({
+      title: 'Clear local cache?',
+      message: 'Clears local caches and session selection state. Google Drive data is not touched.',
+      confirmLabel: 'Clear cache',
+      danger: true,
+    });
+    if (ok) {
       await clearLocalCache();
       onShowToast('Local client cache cleared');
     }
   };
 
   const handleDisconnect = async () => {
-    if (confirm('Disconnect Google Drive from Anchor? Local sessions will remain on this machine.')) {
+    const ok = await confirmDialog({
+      title: 'Disconnect Google Drive?',
+      message: 'Local sessions stay on this machine; they just stop syncing.',
+      confirmLabel: 'Disconnect',
+      danger: true,
+    });
+    if (ok) {
       await disconnectDrive();
       onShowToast('Google Drive disconnected');
     }

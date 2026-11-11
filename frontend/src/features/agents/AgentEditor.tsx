@@ -4,6 +4,7 @@ import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Select } from '../../components/Select';
 import { Dialog } from '../../components/Dialog';
+import { confirmDialog } from '../../store/confirm';
 import { Check, Trash2 } from 'lucide-react';
 
 export interface AgentEditorProps {
@@ -110,7 +111,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({
                 size="xs"
                 icon={<Trash2 className="w-3.5 h-3.5" />}
                 onClick={async () => {
-                  if (confirm(`Delete agent "${agent.name}"?`)) {
+                  const ok = await confirmDialog({
+                    title: `Delete agent "${agent.name}"?`,
+                    message: 'Removes its definition from ~/.gemini/config/agents. Sessions that used it are kept.',
+                    confirmLabel: 'Delete',
+                    danger: true,
+                  });
+                  if (ok) {
                     await onDelete(agent.id);
                     onClose();
                   }

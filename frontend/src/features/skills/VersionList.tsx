@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSkillsStore } from '../../store/skills';
+import { confirmDialog } from '../../store/confirm';
 import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { formatRelativeDate } from '../../lib/format';
@@ -15,9 +16,12 @@ export const VersionList: React.FC<VersionListProps> = ({ skillId, currentVersio
   const rollbackVersion = useSkillsStore((s) => s.rollbackVersion);
 
   const handleRollback = async (ver: string) => {
-    if (confirm(`Rollback skill to version ${ver}? This will restore its previous SKILL.md definition.`)) {
-      await rollbackVersion(skillId, ver);
-    }
+    const ok = await confirmDialog({
+      title: `Roll back to version ${ver}?`,
+      message: 'Restores that version’s SKILL.md and files. The current version is kept in history.',
+      confirmLabel: 'Roll back',
+    });
+    if (ok) await rollbackVersion(skillId, ver);
   };
 
   return (

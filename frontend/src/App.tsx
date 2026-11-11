@@ -11,6 +11,7 @@ import { MarketPage } from './features/market/MarketPage';
 import { SyncPage } from './features/sync/SyncPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Onboarding } from './features/onboarding/Onboarding';
+import { ConfirmHost } from './components/ConfirmDialog';
 import { useSessionStore } from './store/session';
 import { useChatStore } from './store/chat';
 import { useAuthStore } from './store/auth';
@@ -83,6 +84,14 @@ export default function App() {
     return () => off?.();
   }, [loadSessions]);
 
+  // Signing out must land on the sign-in screen rather than leave the shell
+  // up with an empty account: the decision was only taken at bootstrap.
+  useEffect(() => {
+    if (bootstrapped && !authLoading && !account) {
+      setShowOnboarding(true);
+    }
+  }, [bootstrapped, authLoading, account]);
+
   const finishOnboarding = () => {
     setShowOnboarding(false);
     loadSessions();
@@ -146,11 +155,17 @@ export default function App() {
   }
 
   if (showOnboarding) {
-    return <Onboarding onFinish={finishOnboarding} />;
+    return (
+      <>
+        <Onboarding onFinish={finishOnboarding} />
+        <ConfirmHost />
+      </>
+    );
   }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--anchor-bg)] text-[var(--anchor-text)] min-w-[1024px]">
+      <ConfirmHost />
       {/* Native Desktop Window TitleBar */}
       <TitleBar onOpenCommandPalette={() => setCommandPaletteOpen(true)} />
 
