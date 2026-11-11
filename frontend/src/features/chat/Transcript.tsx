@@ -19,9 +19,26 @@ export const Transcript: React.FC<TranscriptProps> = ({
   isStreaming,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Whether the view is following the conversation. Someone who has scrolled
+  // up to re-read an earlier turn should not be yanked back down mid-read.
+  const pinnedRef = useRef(true);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!pinnedRef.current) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Set scrollTop directly rather than scrollIntoView({ behavior: 'smooth' }).
+    // This effect fires on every token of a streaming reply, and each smooth
+    // scroll cancels the one before it, so the animation never finishes and the
+    // newest message is left sitting just below the fold.
+    el.scrollTop = el.scrollHeight;
   }, [steps, isStreaming]);
 
   if (steps.length === 0) {
@@ -36,7 +53,11 @@ export const Transcript: React.FC<TranscriptProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto px-6 py-4 space-y-3"
+    >
       {steps.map((step) => {
         if (step.kind === 'user') {
           return (
