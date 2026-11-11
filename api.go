@@ -528,7 +528,9 @@ type GitHubImport struct {
 // SKILL.md folders become acquired skills. See skills.ParseGitHubRef for
 // the accepted forms.
 func (a *API) SkillsImportFromGitHub(repo string) (GitHubImport, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Download plus `agy plugin install` of a large repository can run for
+	// several minutes on a slow link.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	res, err := a.skills.ImportFromGitHub(ctx, repo)
 	out := GitHubImport{Skills: []model.Skill{}}

@@ -433,7 +433,10 @@ func (s *Service) ImportFromGitHub(ctx context.Context, input string) (*ImportRe
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: 3 * time.Minute}
+	// No overall client timeout: a large repository can take minutes to
+	// stream, and the caller's ctx already bounds the whole import. The
+	// header timeout still catches a server that never answers.
+	client := &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: 30 * time.Second, Proxy: http.ProxyFromEnvironment}}
 
 	refs := []string{ref.Ref}
 	if ref.Ref == "" {
