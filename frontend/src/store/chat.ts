@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Attachment, Step } from '../bridge/types';
 import { getBridge } from '../bridge';
+import { applyChatEvent } from '../lib/steps';
 
 export interface InspectorContent {
   type: 'tool' | 'diff' | 'permission' | 'skill' | 'device';
@@ -52,22 +53,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       for await (const event of stream) {
         if (event.type === 'step') {
           set((state) => ({
-            steps: [...state.steps, event.step],
+            steps: applyChatEvent(state.steps, event),
             activeStepId: event.step.id,
           }));
-        } else if (event.type === 'step_update') {
-          set((state) => ({
-            steps: state.steps.map((s) => (s.id === event.id ? ({ ...s, ...event.patch } as Step) : s)),
-          }));
-        } else if (event.type === 'token') {
-          set((state) => ({
-            steps: state.steps.map((s) => {
-              if (s.id === event.stepId && s.kind === 'agent') {
-                return { ...s, markdown: (s.markdown || '') + event.delta };
-              }
-              return s;
-            }),
-          }));
+        } else if (event.type === 'step_update' || event.type === 'token') {
+          set((state) => ({ steps: applyChatEvent(state.steps, event) }));
         } else if (event.type === 'done') {
           set({ isStreaming: false, activeStepId: null });
         } else if (event.type === 'error') {
