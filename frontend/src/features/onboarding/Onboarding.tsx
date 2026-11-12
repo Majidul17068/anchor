@@ -48,8 +48,12 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[var(--anchor-bg)] text-[var(--anchor-text)] flex flex-col items-center justify-center p-6 select-none overflow-y-auto">
-      <div className="w-full max-w-xl bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-2xl shadow-modal p-8 flex flex-col gap-8 text-left animate-in fade-in zoom-in-95 duration-200">
+    // h-screen + my-auto rather than min-h-screen + justify-center: the body
+    // cannot scroll, so a card taller than a small window was clipped at both
+    // ends with the Launch button out of reach. Now the viewport-sized box
+    // scrolls and the card centres only when it fits.
+    <div className="h-screen w-full bg-[var(--anchor-bg)] text-[var(--anchor-text)] flex flex-col items-center p-6 select-none overflow-y-auto">
+      <div className="w-full max-w-xl my-auto bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-2xl shadow-modal p-8 flex flex-col gap-8 text-left animate-in fade-in zoom-in-95 duration-200">
         {/* Brand header */}
         <div className="flex items-center gap-4 border-b border-[var(--anchor-border)] pb-6">
           <div className="w-12 h-12 rounded-2xl bg-[var(--anchor-accent-subtle)] flex items-center justify-center text-[var(--anchor-accent)] shrink-0 border border-[var(--anchor-accent)]/20 shadow-xs">
