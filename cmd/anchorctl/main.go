@@ -134,8 +134,8 @@ func main() {
 			case "token":
 				fmt.Print(ev.Delta)
 			case "step_update":
-				if ev.Patch != nil && ev.Patch.Status != "" {
-					fmt.Printf("\n[tool -> %s]\n", ev.Patch.Status)
+				if status, _ := ev.Patch["status"].(string); status != "" {
+					fmt.Printf("\n[tool -> %s]\n", status)
 				}
 			case "error":
 				fmt.Printf("\n[error %s] %s\n", ev.Code, ev.Message)

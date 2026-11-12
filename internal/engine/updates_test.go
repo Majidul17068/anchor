@@ -89,7 +89,7 @@ func TestThoughtChunksAccumulate(t *testing.T) {
 		t.Fatalf("unexpected: %+v", l.steps)
 	}
 	last := (*events)[len(*events)-1]
-	if last.Type != "step_update" || last.Patch == nil || last.Patch.Text != "Think more" {
+	if last.Type != "step_update" || last.Patch == nil || last.Patch["text"] != "Think more" {
 		t.Fatalf("unexpected last event: %+v", last)
 	}
 }

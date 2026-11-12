@@ -193,7 +193,7 @@ func (l *live) handleUpdate(u *acp.SessionUpdate) {
 		id := cur.ID
 		l.mu.Unlock()
 		if streaming {
-			l.emitChat(model.ChatEvent{Type: "step_update", ID: id, Patch: &patch})
+			l.emitChat(model.ChatEvent{Type: "step_update", ID: id, Patch: patch})
 		}
 		l.diffsFrom(u, streaming)
 	}
