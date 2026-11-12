@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	gosync "sync"
 	"testing"
+	"time"
 
 	"github.com/Majidul17068/anchor/internal/drive"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/store"
 )
 
-// fakeDrive is an in-memory appDataFolder shared by every "device" in a test.
+// fakeDrive is an in-memory Google Drive shared by every "device" in a
+// test: a hidden app folder for device records and a visible
+// Anchor/YYYY/MM/DD tree for sessions.
 type fakeDrive struct {
 	mu    gosync.Mutex
 	files map[string]*fakeFile // by id
@@ -24,17 +28,35 @@ type fakeFile struct {
 	body []byte
 }
 
+const appParent = "appDataFolder"
+
 func newFakeDrive() *fakeDrive { return &fakeDrive{files: map[string]*fakeFile{}} }
 
 func (f *fakeDrive) Connected() bool { return true }
 func (f *fakeDrive) Email() string   { return "owner@example.com" }
+
+func (f *fakeDrive) put(parent, name string, props map[string]string, content []byte) drive.File {
+	for _, ff := range f.files {
+		if ff.ParentID == parent && ff.Name == name {
+			ff.body = append([]byte(nil), content...)
+			ff.Size = int64(len(content))
+			ff.Props = props
+			ff.Modified = store.Now()
+			return ff.File
+		}
+	}
+	f.next++
+	ff := &fakeFile{File: drive.File{ID: fmt.Sprintf("f%d", f.next), Name: name, Size: int64(len(content)), Modified: store.Now(), Props: props, ParentID: parent}, body: append([]byte(nil), content...)}
+	f.files[ff.ID] = ff
+	return ff.File
+}
 
 func (f *fakeDrive) ListApp(_ context.Context, prefix string) ([]drive.File, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []drive.File
 	for _, ff := range f.files {
-		if prefix == "" || len(ff.Name) >= len(prefix) && ff.Name[:len(prefix)] == prefix {
+		if ff.ParentID == appParent && strings.HasPrefix(ff.Name, prefix) {
 			out = append(out, ff.File)
 		}
 	}
@@ -44,19 +66,29 @@ func (f *fakeDrive) ListApp(_ context.Context, prefix string) ([]drive.File, err
 func (f *fakeDrive) PutApp(_ context.Context, name string, props map[string]string, content []byte) (drive.File, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.put(appParent, name, props, content), nil
+}
+
+func (f *fakeDrive) DayFolder(_ context.Context, t time.Time) (string, error) {
+	return "Anchor/" + drive.DayPath(t), nil
+}
+
+func (f *fakeDrive) PutIn(_ context.Context, parentID, name string, props map[string]string, content []byte) (drive.File, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.put(parentID, name, props, content), nil
+}
+
+func (f *fakeDrive) ListKind(_ context.Context, kind string) ([]drive.File, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []drive.File
 	for _, ff := range f.files {
-		if ff.Name == name {
-			ff.body = append([]byte(nil), content...)
-			ff.Size = int64(len(content))
-			ff.Props = props
-			ff.Modified = store.Now()
-			return ff.File, nil
+		if ff.Props[drive.PropKind] == kind {
+			out = append(out, ff.File)
 		}
 	}
-	f.next++
-	ff := &fakeFile{File: drive.File{ID: fmt.Sprintf("f%d", f.next), Name: name, Size: int64(len(content)), Modified: store.Now(), Props: props}, body: append([]byte(nil), content...)}
-	f.files[ff.ID] = ff
-	return ff.File, nil
+	return out, nil
 }
 
 func (f *fakeDrive) Get(_ context.Context, id string) ([]byte, error) {
@@ -76,14 +108,24 @@ func (f *fakeDrive) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeDrive) names() []string {
+// paths returns "parent/name" for every file, for assertions.
+func (f *fakeDrive) paths() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []string
 	for _, ff := range f.files {
-		out = append(out, ff.Name)
+		out = append(out, ff.ParentID+"/"+ff.Name)
 	}
 	return out
+}
+
+func (f *fakeDrive) has(substr string) bool {
+	for _, p := range f.paths() {
+		if strings.Contains(p, substr) {
+			return true
+		}
+	}
+	return false
 }
 
 // device is one machine: its own ANCHOR_HOME, store and sync engine. The
@@ -132,6 +174,7 @@ func step(kind, id, text string) model.Step {
 }
 
 func TestSessionsStayLocalUntilSyncIsEnabled(t *testing.T) {
+	t.Setenv("ANCHOR_HOME", "")
 	drv := newFakeDrive()
 	a := newDevice(t, "A", drv)
 	a.do(func() {
@@ -143,15 +186,13 @@ func TestSessionsStayLocalUntilSyncIsEnabled(t *testing.T) {
 		_ = a.st.SaveSteps("s1", []model.Step{step("user", "u1", "hello")})
 	})
 	a.sync()
-	for _, n := range drv.names() {
-		if n == sessionFile("s1") {
-			t.Fatalf("local-only session was uploaded: %v", drv.names())
-		}
+	if drv.has("Private") || drv.has("(s1)") {
+		t.Fatalf("local-only session was uploaded: %v", drv.paths())
 	}
 }
 
-func TestPublishPullAppendMergeUnpublish(t *testing.T) {
-	t.Setenv("ANCHOR_HOME", "") // restored afterwards by the testing package
+func TestPublishListPullAppendMergeUnpublish(t *testing.T) {
+	t.Setenv("ANCHOR_HOME", "")
 	drv := newFakeDrive()
 	a := newDevice(t, "A", drv)
 	b := newDevice(t, "B", drv)
@@ -159,9 +200,11 @@ func TestPublishPullAppendMergeUnpublish(t *testing.T) {
 		t.Fatal("devices share an id")
 	}
 
-	// A creates a session and switches sync on (parent source).
+	// A creates a session on 12 Nov 2026 and switches sync on (parent source).
+	created := "2026-11-12T09:30:00Z"
 	a.do(func() {
-		m := &store.SessionMeta{Session: model.Session{ID: "s1", Title: "Shared", OriginDeviceID: a.id, SyncEnabled: true, SyncState: model.SyncPublished, WorkspacePaths: []string{}}}
+		m := &store.SessionMeta{Session: model.Session{ID: "s1", Title: "Fix: login/flow", OriginDeviceID: a.id, SyncEnabled: true,
+			SyncState: model.SyncPublished, WorkspacePaths: []string{}, CreatedAt: created, LastModified: created}}
 		m.ACPSessionID = "s1"
 		m.LocalVersion = 1
 		if err := a.st.SaveSession(m); err != nil {
@@ -170,25 +213,30 @@ func TestPublishPullAppendMergeUnpublish(t *testing.T) {
 		_ = a.st.SaveSteps("s1", []model.Step{step("user", "u1", "hello"), step("agent", "a1", "hi there")})
 	})
 	a.sync()
-	if _, err := drv.ListApp(context.Background(), sessionFile("s1")); err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, n := range drv.names() {
-		if n == sessionFile("s1") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("published session not on drive: %v", drv.names())
+	want := "Anchor/" + drive.DayPath(time.Date(2026, 11, 12, 9, 30, 0, 0, time.UTC)) + "/Fix- login-flow (s1).json"
+	if !drv.has(want) {
+		t.Fatalf("published session not filed by day with a readable name: %v", drv.paths())
 	}
 
-	// B pulls it as a replica with the transcript.
+	// B does not get it automatically; it appears in the list to pull from.
 	b.sync()
 	b.do(func() {
+		if _, err := b.st.GetSession("s1"); err == nil {
+			t.Fatal("session was pulled without being asked for")
+		}
+		avail, err := b.eng.Available(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(avail) != 1 || avail[0].ID != "s1" || avail[0].Title != "Fix: login/flow" || avail[0].StepCount != 2 || avail[0].OriginDeviceID != a.id || avail[0].Day == "" {
+			t.Fatalf("available = %+v", avail)
+		}
+		if _, err := b.eng.Pull(context.Background(), "s1"); err != nil {
+			t.Fatal(err)
+		}
 		m, err := b.st.GetSession("s1")
 		if err != nil {
-			t.Fatalf("replica missing on B: %v", err)
+			t.Fatalf("replica missing on B after pull: %v", err)
 		}
 		if m.SyncState != model.SyncReplica || m.OriginDeviceID != a.id || !m.SyncEnabled {
 			t.Fatalf("replica meta = %+v", m.Session)
@@ -197,20 +245,17 @@ func TestPublishPullAppendMergeUnpublish(t *testing.T) {
 		if len(steps) != 2 || steps[1].Text != "hi there" {
 			t.Fatalf("replica steps = %+v", steps)
 		}
+		if avail, _ := b.eng.Available(context.Background()); len(avail) != 0 {
+			t.Fatalf("pulled session still listed as available: %+v", avail)
+		}
 		// B continues the conversation locally.
 		_ = b.st.SaveSteps("s1", append(steps, step("user", "u2", "from B")))
 		m.LocalVersion++
 		_ = b.st.SaveSession(m)
 	})
 	b.sync()
-	hasAppend := false
-	for _, n := range drv.names() {
-		if isAppendOf(n, "s1") {
-			hasAppend = true
-		}
-	}
-	if !hasAppend {
-		t.Fatalf("B's addition was not uploaded as an append: %v", drv.names())
+	if !drv.has("- from ") {
+		t.Fatalf("B's addition was not uploaded as an append: %v", drv.paths())
 	}
 
 	// A merges the append into the canonical transcript.
@@ -225,19 +270,29 @@ func TestPublishPullAppendMergeUnpublish(t *testing.T) {
 			t.Fatalf("parent meta after merge = %+v", m.Session)
 		}
 	})
-	for _, n := range drv.names() {
-		if isAppendOf(n, "s1") {
-			t.Fatalf("append not cleaned up after merge: %v", drv.names())
-		}
+	if drv.has("- from ") {
+		t.Fatalf("append not cleaned up after merge: %v", drv.paths())
 	}
 
-	// B sees the merged canonical transcript.
+	// B sees the merged canonical transcript on its next refresh.
 	b.sync()
 	b.do(func() {
 		if steps := b.st.Steps("s1"); len(steps) != 3 {
 			t.Fatalf("replica not updated after merge: %+v", steps)
 		}
 	})
+
+	// A renames the session: the Drive file follows.
+	a.do(func() {
+		m, _ := a.st.GetSession("s1")
+		m.Title = "Login fixed"
+		m.LocalVersion++
+		_ = a.st.SaveSession(m)
+	})
+	a.sync()
+	if !drv.has("Login fixed (s1).json") || drv.has("Fix- login-flow (s1).json") {
+		t.Fatalf("rename not reflected: %v", drv.paths())
+	}
 
 	// A switches sync off: the file goes, B's copy becomes local.
 	a.do(func() {
@@ -247,10 +302,8 @@ func TestPublishPullAppendMergeUnpublish(t *testing.T) {
 		_ = a.st.SaveSession(m)
 	})
 	a.sync()
-	for _, n := range drv.names() {
-		if n == sessionFile("s1") {
-			t.Fatalf("unpublished session still on drive: %v", drv.names())
-		}
+	if drv.has("(s1)") {
+		t.Fatalf("unpublished session still on drive: %v", drv.paths())
 	}
 	b.sync()
 	b.do(func() {

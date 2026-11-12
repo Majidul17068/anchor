@@ -5,6 +5,7 @@ import { DriveStatus } from './DriveStatus';
 import { DeviceCard } from './DeviceCard';
 import { ConflictList } from './ConflictList';
 import { RulesPanel } from './RulesPanel';
+import { DriveSessions } from './DriveSessions';
 import { HardDrive } from 'lucide-react';
 
 export const SyncPage: React.FC = () => {
@@ -48,6 +49,9 @@ export const SyncPage: React.FC = () => {
         conflicts={conflicts}
         onResolve={resolveConflict}
       />
+
+      {/* Sessions other devices saved to Drive, pulled on demand */}
+      <DriveSessions />
 
       {/* Rules Explanation Panel */}
       <RulesPanel />

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Conflict, Device, SyncStatus } from '../bridge/types';
+import type { Conflict, Device, RemoteSession, Session, SyncStatus } from '../bridge/types';
 import { getBridge } from '../bridge';
 
 interface SyncState {
@@ -11,8 +11,14 @@ interface SyncState {
   loading: boolean;
   /** Why the last connect/sync failed, for the UI to show. */
   error: string | null;
+  /** Sessions on Drive from other devices, not yet pulled here. */
+  available: RemoteSession[];
+  /** Id of the session being pulled right now. */
+  pulling: string | null;
 
   loadSyncState: () => Promise<void>;
+  loadAvailable: () => Promise<void>;
+  pullSession: (sessionId: string) => Promise<Session | null>;
   syncNow: () => Promise<void>;
   connectDrive: () => Promise<void>;
   disconnectDrive: () => Promise<void>;
@@ -28,6 +34,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   isSyncing: false,
   loading: false,
   error: null,
+  available: [],
+  pulling: null,
 
   loadSyncState: async () => {
     try {
@@ -96,5 +104,28 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     const bridge = getBridge();
     await bridge.devices.rename(name);
     await get().loadSyncState();
+  },
+
+  loadAvailable: async () => {
+    try {
+      const bridge = getBridge();
+      const list = await bridge.sync.available();
+      set({ available: list });
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+
+  pullSession: async (sessionId: string) => {
+    set({ pulling: sessionId, error: null });
+    try {
+      const bridge = getBridge();
+      const s = await bridge.sync.pull(sessionId);
+      set((state) => ({ available: state.available.filter((r) => r.id !== sessionId), pulling: null }));
+      return s;
+    } catch (e) {
+      set({ pulling: null, error: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
   },
 }));

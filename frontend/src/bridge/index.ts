@@ -13,6 +13,7 @@ import type {
   Notification,
   Platform,
   Project,
+  RemoteSession,
   Review,
   Session,
   Share,
@@ -161,6 +162,10 @@ export interface AnchorBridge {
     syncNow(): Promise<SyncStatus>;
     conflicts(): Promise<Conflict[]>;
     resolveConflict(sessionId: string, as: 'parent' | 'merged'): Promise<void>;
+    /** Sessions on Drive from other devices, not yet pulled here. */
+    available(): Promise<RemoteSession[]>;
+    /** Pull one of them as a local replica that can be continued. */
+    pull(sessionId: string): Promise<Session>;
     onChange(cb: (status: SyncStatus) => void): () => void;
   };
   settings: {

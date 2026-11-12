@@ -52,6 +52,14 @@ const (
 	sharedFolderName = "Shared skills"
 	PropSkill        = "anchorSkill"
 	PropKind         = "anchorKind"
+	// Session files carry these so they can be found wherever they sit in
+	// the Anchor/YYYY/MM/DD tree without walking folders.
+	PropSession = "anchorSession" // session id
+	PropDevice  = "anchorDevice"  // device that wrote an append
+	PropOrigin  = "origin"        // parent-source device of a session
+	PropDay     = "anchorDay"     // "YYYY/MM/DD" folder the file lives in
+	PropTitle   = "anchorTitle"
+	PropSteps   = "anchorSteps"
 )
 
 type Service struct {
@@ -60,6 +68,7 @@ type Service struct {
 	openURL func(string)
 	mu      sync.Mutex
 	client  *gdrive.Service
+	folders map[string]string // "YYYY/MM/DD" -> folder id, this process only
 }
 
 type savedToken struct {
@@ -295,10 +304,15 @@ type File struct {
 	Size     int64
 	Modified string
 	Props    map[string]string
+	ParentID string // first parent folder, when requested
 }
 
 func fromAPI(f *gdrive.File) File {
-	return File{ID: f.Id, Name: f.Name, Size: f.Size, Modified: f.ModifiedTime, Props: f.AppProperties}
+	out := File{ID: f.Id, Name: f.Name, Size: f.Size, Modified: f.ModifiedTime, Props: f.AppProperties}
+	if len(f.Parents) > 0 {
+		out.ParentID = f.Parents[0]
+	}
+	return out
 }
 
 func escape(s string) string { return strings.ReplaceAll(s, "'", `\'`) }
@@ -389,6 +403,107 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return nil
 	}
 	return err
+}
+
+// ---------------------------------------------------------------------------
+// the visible Anchor folder: Anchor/YYYY/MM/DD/<session>.json
+// ---------------------------------------------------------------------------
+
+// RootFolder returns the id of the user's visible "Anchor" folder, creating
+// it the first time. Connect calls this so the folder exists before any
+// session is published.
+func (s *Service) RootFolder(ctx context.Context) (string, error) {
+	return s.folder(ctx, appFolderName, "")
+}
+
+// DayPath is the folder path a session created at t is filed under.
+func DayPath(t time.Time) string { return t.Local().Format("2006/01/02") }
+
+// DayFolder returns the id of Anchor/YYYY/MM/DD for t, creating missing
+// levels. Ids are cached per process; the folders are never deleted.
+func (s *Service) DayFolder(ctx context.Context, t time.Time) (string, error) {
+	day := DayPath(t)
+	s.mu.Lock()
+	if s.folders == nil {
+		s.folders = map[string]string{}
+	}
+	if id, ok := s.folders[day]; ok {
+		s.mu.Unlock()
+		return id, nil
+	}
+	s.mu.Unlock()
+	parent, err := s.RootFolder(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, seg := range strings.Split(day, "/") {
+		parent, err = s.folder(ctx, seg, parent)
+		if err != nil {
+			return "", err
+		}
+	}
+	s.mu.Lock()
+	s.folders[day] = parent
+	s.mu.Unlock()
+	return parent, nil
+}
+
+// PutIn creates or replaces a file by name inside a folder.
+func (s *Service) PutIn(ctx context.Context, parentID, name string, props map[string]string, content []byte) (File, error) {
+	cl, err := s.Client(ctx)
+	if err != nil {
+		return File{}, err
+	}
+	q := fmt.Sprintf("'%s' in parents and name = '%s' and trashed = false", escape(parentID), escape(name))
+	existing, err := cl.Files.List().Q(q).Fields("files(id)").Context(ctx).Do()
+	if err != nil {
+		return File{}, err
+	}
+	const fields = "id, name, size, modifiedTime, appProperties, parents"
+	if len(existing.Files) > 0 {
+		res, err := cl.Files.Update(existing.Files[0].Id, &gdrive.File{AppProperties: props}).Media(bytes.NewReader(content)).Fields(fields).Context(ctx).Do()
+		if err != nil {
+			return File{}, err
+		}
+		return fromAPI(res), nil
+	}
+	meta := &gdrive.File{Name: name, Parents: []string{parentID}, AppProperties: props, MimeType: "application/json"}
+	res, err := cl.Files.Create(meta).Media(bytes.NewReader(content)).Fields(fields).Context(ctx).Do()
+	if err != nil {
+		return File{}, err
+	}
+	return fromAPI(res), nil
+}
+
+// ListKind lists every file Anchor created with anchorKind=kind, wherever
+// it sits under the Anchor folder. With the drive.file scope Google only
+// returns files this app created, which is exactly the set wanted.
+func (s *Service) ListKind(ctx context.Context, kind string) ([]File, error) {
+	cl, err := s.Client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := fmt.Sprintf("appProperties has { key='%s' and value='%s' } and trashed = false", PropKind, escape(kind))
+	var out []File
+	pageToken := ""
+	for {
+		call := cl.Files.List().Q(q).Fields("nextPageToken, files(id, name, size, modifiedTime, appProperties, parents)").PageSize(200)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+		res, err := call.Context(ctx).Do()
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range res.Files {
+			out = append(out, fromAPI(f))
+		}
+		if res.NextPageToken == "" {
+			break
+		}
+		pageToken = res.NextPageToken
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------

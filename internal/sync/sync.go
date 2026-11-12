@@ -1,13 +1,19 @@
-// Package sync keeps sessions in step across the user's devices through
-// their own Google Drive appDataFolder, following the parent-source rule:
+// Package sync backs sessions up to the user's own Google Drive and lets
+// their other devices pull them, following the parent-source rule:
 //
 //   - the device that created a session is its parent source and is the
 //     only one that can publish or unpublish it;
-//   - every other device pulls published sessions automatically as replicas;
+//   - a published session is saved as a visible file in the user's Drive,
+//     under Anchor/YYYY/MM/DD/ (the day the session was created);
+//   - another device signed in to the same Google account sees the list of
+//     published sessions and pulls the ones it wants as replicas;
 //   - a replica may continue the conversation; its new steps are uploaded as
-//     an append file that the parent merges into the canonical transcript;
+//     an append file next to the session that the parent merges into the
+//     canonical transcript;
 //   - when both sides changed since the last merge the session is flagged
 //     as a conflict until the parent chooses "parent wins" or "merge".
+//
+// Device records stay in the hidden appDataFolder; they are not for people.
 package sync
 
 import (
@@ -15,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	gosync "sync"
 	"time"
@@ -27,6 +34,8 @@ import (
 
 const (
 	pollInterval = 30 * time.Second
+	kindSession  = "session"
+	kindAppend   = "append"
 )
 
 // Drive is the slice of the Google Drive client the sync engine needs. It
@@ -35,8 +44,13 @@ const (
 type Drive interface {
 	Connected() bool
 	Email() string
+	// Hidden appDataFolder, used for device records.
 	ListApp(ctx context.Context, prefix string) ([]drive.File, error)
 	PutApp(ctx context.Context, name string, props map[string]string, content []byte) (drive.File, error)
+	// Visible Anchor/YYYY/MM/DD tree, used for sessions.
+	DayFolder(ctx context.Context, t time.Time) (string, error)
+	PutIn(ctx context.Context, parentID, name string, props map[string]string, content []byte) (drive.File, error)
+	ListKind(ctx context.Context, kind string) ([]drive.File, error)
 	Get(ctx context.Context, id string) ([]byte, error)
 	Delete(ctx context.Context, id string) error
 }
@@ -185,7 +199,52 @@ func (e *Engine) setStatus(fn func(*model.SyncStatus)) {
 	}
 }
 
-// SyncNow runs one push/pull cycle.
+// ---------------------------------------------------------------------------
+// what is on Drive
+// ---------------------------------------------------------------------------
+
+// index is one listing of the session and append files on Drive.
+type index struct {
+	sessions map[string]drive.File   // by session id
+	appends  map[string][]drive.File // by session id
+	usage    int64
+}
+
+func (e *Engine) list(ctx context.Context) (*index, error) {
+	idx := &index{sessions: map[string]drive.File{}, appends: map[string][]drive.File{}}
+	ss, err := e.drv.ListKind(ctx, kindSession)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range ss {
+		id := f.Props[drive.PropSession]
+		if id == "" {
+			continue
+		}
+		// Two files for one id (should not happen): keep the newest.
+		if cur, ok := idx.sessions[id]; !ok || f.Modified > cur.Modified {
+			idx.sessions[id] = f
+		}
+		idx.usage += f.Size
+	}
+	as, err := e.drv.ListKind(ctx, kindAppend)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range as {
+		id := f.Props[drive.PropSession]
+		if id == "" {
+			continue
+		}
+		idx.appends[id] = append(idx.appends[id], f)
+		idx.usage += f.Size
+	}
+	return idx, nil
+}
+
+// SyncNow runs one push/pull cycle: publish or refresh this device's
+// sessions, upload replica additions, and refresh replicas already pulled.
+// It never pulls a session this device has not asked for; see Pull.
 func (e *Engine) SyncNow(ctx context.Context) (model.SyncStatus, error) {
 	e.runMu.Lock()
 	defer e.runMu.Unlock()
@@ -198,39 +257,36 @@ func (e *Engine) SyncNow(ctx context.Context) (model.SyncStatus, error) {
 	if err := e.pushDevice(ctx); err != nil {
 		e.logf("sync device: %v", err)
 	}
-	files, err := e.drv.ListApp(ctx, "")
+	idx, err := e.list(ctx)
 	if err != nil {
 		return e.Status(), err
 	}
-	byName := map[string]drive.File{}
-	var usage int64
-	for _, f := range files {
-		byName[f.Name] = f
-		usage += f.Size
-	}
 	me := e.st.Device().ID
+	// Refresh replicas before pushing their additions: once the parent has
+	// merged an append, the replica must learn that first, or it re-uploads
+	// the same steps and the parent's next change looks like a conflict.
+	pulled, err := e.refreshReplicas(ctx, idx, me)
+	if err != nil {
+		e.logf("pull: %v", err)
+	}
+	changed = changed || pulled
 	for _, m := range e.st.ListSessions() {
 		var c bool
 		var err error
 		switch {
 		case m.OriginDeviceID == me:
-			c, err = e.pushParent(ctx, m, byName)
+			c, err = e.pushParent(ctx, m, idx)
 		case m.SyncState == model.SyncReplica || m.SyncState == model.SyncConflict:
-			c, err = e.pushReplica(ctx, m, byName)
+			c, err = e.pushReplica(ctx, m, idx)
 		}
 		if err != nil {
 			e.logf("sync %s: %v", m.ID, err)
 		}
 		changed = changed || c
 	}
-	pulled, err := e.pull(ctx, byName, me)
-	if err != nil {
-		e.logf("pull: %v", err)
-	}
-	changed = changed || pulled
 	e.setStatus(func(s *model.SyncStatus) {
 		s.LastSyncAt = store.Now()
-		s.UsageBytes = usage
+		s.UsageBytes = idx.usage
 	})
 	if changed && e.emit != nil {
 		e.emit("sessions:changed", map[string]any{"source": "sync"})
@@ -242,20 +298,69 @@ func (e *Engine) pushDevice(ctx context.Context) error {
 	d := e.st.Device()
 	rd := remoteDevice{Device: model.Device{ID: d.ID, Name: d.Name, Platform: d.Platform, LastSeen: store.Now()}}
 	b, _ := json.Marshal(rd)
-	_, err := e.drv.PutApp(ctx, "device-"+d.ID+".json", map[string]string{"anchorKind": "device"}, b)
+	_, err := e.drv.PutApp(ctx, "device-"+d.ID+".json", map[string]string{drive.PropKind: "device"}, b)
 	return err
 }
 
-func sessionFile(id string) string         { return "session-" + id + ".json" }
-func appendFile(id, dev string) string      { return "session-" + id + ".append-" + dev + ".json" }
-func isAppendOf(name, id string) bool       { return strings.HasPrefix(name, "session-"+id+".append-") }
-func appendDevice(name, id string) string   { return strings.TrimSuffix(strings.TrimPrefix(name, "session-"+id+".append-"), ".json") }
+// ---------------------------------------------------------------------------
+// file names in the visible folder
+// ---------------------------------------------------------------------------
+
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
+// safeTitle turns a session title into something every file system and
+// Drive accept, so the file reads well in the user's Drive.
+func safeTitle(title string) string {
+	t := strings.TrimSpace(title)
+	if t == "" {
+		t = "Session"
+	}
+	var b strings.Builder
+	for _, r := range t {
+		switch {
+		case strings.ContainsRune(`/\:*?"<>|`, r), r < 0x20:
+			b.WriteRune('-')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := strings.TrimSpace(b.String())
+	if len(out) > 80 {
+		out = strings.TrimSpace(out[:80])
+	}
+	return out
+}
+
+func sessionName(title, id string) string {
+	return fmt.Sprintf("%s (%s).json", safeTitle(title), shortID(id))
+}
+
+func appendName(title, id, device string) string {
+	return fmt.Sprintf("%s (%s) - from %s.json", safeTitle(title), shortID(id), shortID(device))
+}
+
+func createdAt(m *store.SessionMeta) time.Time {
+	for _, s := range []string{m.CreatedAt, m.LastModified} {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return t
+		}
+	}
+	return time.Now()
+}
+
+// ---------------------------------------------------------------------------
+// push
+// ---------------------------------------------------------------------------
 
 // pushParent publishes or unpublishes a session owned by this device and
 // merges replica appends.
-func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, byName map[string]drive.File) (bool, error) {
-	name := sessionFile(m.ID)
-	remote, exists := byName[name]
+func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, idx *index) (bool, error) {
+	remote, exists := idx.sessions[m.ID]
 	if !m.SyncEnabled {
 		if !exists && m.DriveFileID == "" {
 			return false, nil
@@ -266,10 +371,8 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, byName ma
 				return false, err
 			}
 		}
-		for n, f := range byName {
-			if isAppendOf(n, m.ID) {
-				_ = e.drv.Delete(ctx, f.ID)
-			}
+		for _, f := range idx.appends[m.ID] {
+			_ = e.drv.Delete(ctx, f.ID)
 		}
 		m.DriveFileID = ""
 		m.RemoteVersion = 0
@@ -284,10 +387,7 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, byName ma
 		file drive.File
 		data remoteAppend
 	}
-	for n, f := range byName {
-		if !isAppendOf(n, m.ID) {
-			continue
-		}
+	for _, f := range idx.appends[m.ID] {
 		b, err := e.drv.Get(ctx, f.ID)
 		if err != nil {
 			continue
@@ -306,6 +406,11 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, byName ma
 		e.mu.Unlock()
 		parentChanged := m.LocalVersion > m.RemoteVersion
 		for _, a := range appends {
+			if len(missingSteps(steps, a.data.Steps)) == 0 {
+				// Everything in it is already here (a stale re-upload).
+				_ = e.drv.Delete(ctx, a.file.ID)
+				continue
+			}
 			if parentChanged && a.data.BaseVersion < m.RemoteVersion && (!hasConflict || c.ResolvedAs == "") {
 				// Both sides moved: flag and wait for the user's decision.
 				e.mu.Lock()
@@ -355,7 +460,21 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, byName ma
 		payload := remoteSession{Session: m.Session, Version: m.RemoteVersion, OriginDeviceID: m.OriginDeviceID, Steps: steps, UpdatedAt: store.Now()}
 		payload.Session.StepCount = len(steps)
 		b, _ := json.Marshal(payload)
-		f, err := e.drv.PutApp(ctx, name, map[string]string{"anchorKind": "session", "origin": m.OriginDeviceID}, b)
+		created := createdAt(m)
+		folder, err := e.drv.DayFolder(ctx, created)
+		if err != nil {
+			return changed, err
+		}
+		props := map[string]string{
+			drive.PropKind: kindSession, drive.PropSession: m.ID, drive.PropOrigin: m.OriginDeviceID,
+			drive.PropDay: drive.DayPath(created), drive.PropTitle: m.Title, drive.PropSteps: strconv.Itoa(len(steps)),
+		}
+		// A renamed session gets a new file name; drop the old file first.
+		name := sessionName(m.Title, m.ID)
+		if exists && remote.Name != name {
+			_ = e.drv.Delete(ctx, remote.ID)
+		}
+		f, err := e.drv.PutIn(ctx, folder, name, props, b)
 		if err != nil {
 			return changed, err
 		}
@@ -366,10 +485,15 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, byName ma
 	return changed, nil
 }
 
-// pushReplica uploads steps added on this device to a replica session.
-func (e *Engine) pushReplica(ctx context.Context, m *store.SessionMeta, byName map[string]drive.File) (bool, error) {
+// pushReplica uploads steps added on this device to a replica session, as
+// an append file beside the canonical one.
+func (e *Engine) pushReplica(ctx context.Context, m *store.SessionMeta, idx *index) (bool, error) {
 	if m.LocalVersion <= m.RemoteVersion {
 		return false, nil
+	}
+	canonical, ok := idx.sessions[m.ID]
+	if !ok {
+		return false, nil // unpublished; refreshReplicas handles it
 	}
 	steps := e.st.Steps(m.ID)
 	if len(steps) <= m.StepCount {
@@ -380,82 +504,174 @@ func (e *Engine) pushReplica(ctx context.Context, m *store.SessionMeta, byName m
 	me := e.st.Device().ID
 	payload := remoteAppend{DeviceID: me, BaseVersion: m.RemoteVersion, Steps: extra, UpdatedAt: store.Now()}
 	b, _ := json.Marshal(payload)
-	if _, err := e.drv.PutApp(ctx, appendFile(m.ID, me), map[string]string{"anchorKind": "append"}, b); err != nil {
+	props := map[string]string{drive.PropKind: kindAppend, drive.PropSession: m.ID, drive.PropDevice: me}
+	if _, err := e.drv.PutIn(ctx, canonical.ParentID, appendName(m.Title, m.ID, me), props, b); err != nil {
 		return false, err
 	}
 	return false, nil
 }
 
-// pull downloads sessions published by other devices.
-func (e *Engine) pull(ctx context.Context, byName map[string]drive.File, me string) (bool, error) {
+// ---------------------------------------------------------------------------
+// pull
+// ---------------------------------------------------------------------------
+
+// refreshReplicas updates sessions this device already pulled and notices
+// ones the parent unpublished. It does not pull new sessions.
+func (e *Engine) refreshReplicas(ctx context.Context, idx *index, me string) (bool, error) {
 	changed := false
-	seen := map[string]bool{}
-	for name, f := range byName {
-		if !strings.HasPrefix(name, "session-") || strings.Contains(name, ".append-") {
+	for _, m := range e.st.ListSessions() {
+		if m.OriginDeviceID == me || (m.SyncState != model.SyncReplica && m.SyncState != model.SyncConflict) {
 			continue
 		}
-		if f.Props["origin"] == me {
+		f, ok := idx.sessions[m.ID]
+		if !ok {
+			if m.DriveFileID != "" {
+				// The parent switched sync off: keep the local copy, stop syncing.
+				m.SyncEnabled = false
+				m.SyncState = model.SyncLocal
+				m.Unpublished = true
+				m.DriveFileID = ""
+				_ = e.st.SaveSession(m)
+				changed = true
+			}
 			continue
 		}
-		id := strings.TrimSuffix(strings.TrimPrefix(name, "session-"), ".json")
-		seen[id] = true
-		local, err := e.st.GetSession(id)
-		if err == nil && local.OriginDeviceID == me {
-			continue
-		}
-		if err == nil && local.RemoteVersion > 0 && local.DriveFileID == f.ID && f.Modified != "" && f.Modified <= local.LastModified && local.LocalVersion == local.RemoteVersion {
+		if m.RemoteVersion > 0 && m.DriveFileID == f.ID && f.Modified != "" && f.Modified <= m.LastModified && m.LocalVersion == m.RemoteVersion {
 			continue // unchanged
 		}
-		b, err := e.drv.Get(ctx, f.ID)
-		if err != nil {
-			continue
-		}
-		var rs remoteSession
-		if err := json.Unmarshal(b, &rs); err != nil {
-			continue
-		}
-		if err == nil && local != nil && rs.Version <= local.RemoteVersion && local.DriveFileID == f.ID {
-			continue
-		}
-		meta := &store.SessionMeta{Session: rs.Session}
-		meta.ID = id
-		meta.OriginDeviceID = rs.OriginDeviceID
-		meta.SyncEnabled = true
-		meta.SyncState = model.SyncReplica
-		meta.DriveFileID = f.ID
-		meta.RemoteVersion = rs.Version
-		meta.LocalVersion = rs.Version
-		meta.StepCount = len(rs.Steps)
-		meta.CachedAt = store.Now()
-		if local != nil {
-			meta.ACPSessionID = local.ACPSessionID
-			meta.Pinned = local.Pinned
-			// Keep steps this replica added that the parent has not merged yet.
-			localSteps := e.st.Steps(id)
-			if len(localSteps) > local.StepCount {
-				rs.Steps = mergeSteps(rs.Steps, localSteps[local.StepCount:])
-				meta.LocalVersion = meta.RemoteVersion + 1
-			}
-		}
-		if meta.WorkspacePaths == nil {
-			meta.WorkspacePaths = []string{}
-		}
-		_ = e.st.SaveSteps(id, rs.Steps)
-		_ = e.st.SaveSession(meta)
-		changed = true
-	}
-	// Replicas whose canonical file vanished were unpublished by the parent.
-	for _, m := range e.st.ListSessions() {
-		if m.OriginDeviceID != me && (m.SyncState == model.SyncReplica || m.SyncState == model.SyncConflict) && !seen[m.ID] && m.DriveFileID != "" {
-			m.SyncEnabled = false
-			m.SyncState = model.SyncLocal
-			m.Unpublished = true
-			m.DriveFileID = ""
-			_ = e.st.SaveSession(m)
-			changed = true
+		if c, err := e.applyRemote(ctx, f, m); err != nil {
+			e.logf("refresh %s: %v", m.ID, err)
+		} else {
+			changed = changed || c
 		}
 	}
 	return changed, nil
+}
+
+// applyRemote downloads a canonical session file and stores it locally as a
+// replica, keeping any steps this device added that the parent has not
+// merged yet. local may be nil for a first pull.
+func (e *Engine) applyRemote(ctx context.Context, f drive.File, local *store.SessionMeta) (bool, error) {
+	b, err := e.drv.Get(ctx, f.ID)
+	if err != nil {
+		return false, err
+	}
+	var rs remoteSession
+	if err := json.Unmarshal(b, &rs); err != nil {
+		return false, err
+	}
+	id := f.Props[drive.PropSession]
+	if local != nil && rs.Version <= local.RemoteVersion && local.DriveFileID == f.ID {
+		return false, nil
+	}
+	meta := &store.SessionMeta{Session: rs.Session}
+	meta.ID = id
+	meta.OriginDeviceID = rs.OriginDeviceID
+	meta.SyncEnabled = true
+	meta.SyncState = model.SyncReplica
+	meta.DriveFileID = f.ID
+	meta.RemoteVersion = rs.Version
+	meta.LocalVersion = rs.Version
+	meta.StepCount = len(rs.Steps)
+	meta.CachedAt = store.Now()
+	if local != nil {
+		meta.ACPSessionID = local.ACPSessionID
+		meta.Pinned = local.Pinned
+		// Keep steps this replica added that the parent has not merged yet.
+		// Only steps genuinely absent from the canonical transcript count:
+		// re-flagging ones the parent already merged produced a second
+		// append and a phantom conflict on the parent's next change.
+		localSteps := e.st.Steps(id)
+		if len(localSteps) > local.StepCount {
+			if extra := missingSteps(rs.Steps, localSteps[local.StepCount:]); len(extra) > 0 {
+				rs.Steps = mergeSteps(rs.Steps, extra)
+				meta.LocalVersion = meta.RemoteVersion + 1
+			}
+		}
+	}
+	if meta.WorkspacePaths == nil {
+		meta.WorkspacePaths = []string{}
+	}
+	if err := e.st.SaveSteps(id, rs.Steps); err != nil {
+		return false, err
+	}
+	return true, e.st.SaveSession(meta)
+}
+
+// Available lists sessions other devices published that this device has
+// not pulled, newest first.
+func (e *Engine) Available(ctx context.Context) ([]model.RemoteSession, error) {
+	out := []model.RemoteSession{}
+	if !e.drv.Connected() {
+		return out, nil
+	}
+	idx, err := e.list(ctx)
+	if err != nil {
+		return out, err
+	}
+	me := e.st.Device().ID
+	local := map[string]bool{}
+	for _, m := range e.st.ListSessions() {
+		local[m.ID] = true
+	}
+	names := e.deviceNames(ctx)
+	for id, f := range idx.sessions {
+		if local[id] || f.Props[drive.PropOrigin] == me {
+			continue
+		}
+		steps, _ := strconv.Atoi(f.Props[drive.PropSteps])
+		out = append(out, model.RemoteSession{
+			ID: id, Title: f.Props[drive.PropTitle], OriginDeviceID: f.Props[drive.PropOrigin],
+			OriginDeviceName: names[f.Props[drive.PropOrigin]], Day: f.Props[drive.PropDay],
+			StepCount: steps, UpdatedAt: f.Modified, SizeBytes: f.Size,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt > out[j].UpdatedAt })
+	return out, nil
+}
+
+// Pull fetches one published session as a replica on this device.
+func (e *Engine) Pull(ctx context.Context, sessionID string) (model.Session, error) {
+	if !e.drv.Connected() {
+		return model.Session{}, fmt.Errorf("DRIVE_NOT_CONNECTED: connect Google Drive first")
+	}
+	if m, err := e.st.GetSession(sessionID); err == nil {
+		return m.Session, nil // already here
+	}
+	idx, err := e.list(ctx)
+	if err != nil {
+		return model.Session{}, err
+	}
+	f, ok := idx.sessions[sessionID]
+	if !ok {
+		return model.Session{}, fmt.Errorf("session %s is not on Drive", shortID(sessionID))
+	}
+	if _, err := e.applyRemote(ctx, f, nil); err != nil {
+		return model.Session{}, err
+	}
+	m, err := e.st.GetSession(sessionID)
+	if err != nil {
+		return model.Session{}, err
+	}
+	if e.emit != nil {
+		e.emit("sessions:changed", map[string]any{"source": "pull", "sessionId": sessionID})
+	}
+	return m.Session, nil
+}
+
+// missingSteps returns the steps of extra whose ids are not in base.
+func missingSteps(base, extra []model.Step) []model.Step {
+	have := map[string]bool{}
+	for _, s := range base {
+		have[s.ID] = true
+	}
+	var out []model.Step
+	for _, s := range extra {
+		if !have[s.ID] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // mergeSteps appends steps not already present, ordered by time.
@@ -495,6 +711,28 @@ func (e *Engine) Resolve(sessionID, as string) error {
 	}
 	go func() { _, _ = e.SyncNow(context.Background()) }()
 	return nil
+}
+
+// deviceNames maps device id -> name from the device records on Drive.
+func (e *Engine) deviceNames(ctx context.Context) map[string]string {
+	out := map[string]string{}
+	d := e.st.Device()
+	out[d.ID] = d.Name
+	files, err := e.drv.ListApp(ctx, "device-")
+	if err != nil {
+		return out
+	}
+	for _, f := range files {
+		b, err := e.drv.Get(ctx, f.ID)
+		if err != nil {
+			continue
+		}
+		var rd remoteDevice
+		if json.Unmarshal(b, &rd) == nil && rd.ID != "" {
+			out[rd.ID] = rd.Name
+		}
+	}
+	return out
 }
 
 // Devices lists this device plus every device seen on Drive.

@@ -2114,6 +2114,22 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
       async conflicts() {
         return [...conflictsList];
       },
+      async available() {
+        if (!syncStatus.driveConnected) return [];
+        return [
+          { id: 'remote_1', title: 'Refactor payments module', originDeviceId: 'dev_win', originDeviceName: 'Office PC', day: '2026/11/10', stepCount: 42, updatedAt: new Date(Date.now() - 3600_000).toISOString(), sizeBytes: 58_000 },
+          { id: 'remote_2', title: 'Draft release notes', originDeviceId: 'dev_win', originDeviceName: 'Office PC', day: '2026/11/12', stepCount: 9, updatedAt: new Date(Date.now() - 600_000).toISOString(), sizeBytes: 12_000 },
+        ];
+      },
+      async pull(sessionId: string) {
+        const s: Session = {
+          id: sessionId, title: sessionId === 'remote_1' ? 'Refactor payments module' : 'Draft release notes', preview: 'Pulled from Drive',
+          modelId: 'gemini-4-argon', effort: 'medium', mode: 'default', workspacePaths: [], originDeviceId: 'dev_win',
+          syncEnabled: true, syncState: 'replica', stepCount: 9, createdAt: new Date().toISOString(), lastModified: new Date().toISOString(), pinned: false,
+        };
+        sessions.unshift(s);
+        return s;
+      },
       async resolveConflict(sessionId: string, as: 'parent' | 'merged') {
         const sess = sessions.find((s) => s.id === sessionId);
         if (sess) {

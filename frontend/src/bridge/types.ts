@@ -217,6 +217,19 @@ export interface SyncStatus {
   usageBytes: number;
 }
 
+/** A session another device published to Drive that this one has not pulled. */
+export interface RemoteSession {
+  id: string;
+  title: string;
+  originDeviceId: string;
+  originDeviceName?: string;
+  /** Folder under Anchor/, e.g. "2026/11/12" — the day the session was created. */
+  day: string;
+  stepCount: number;
+  updatedAt: string;
+  sizeBytes: number;
+}
+
 export interface Conflict {
   sessionId: string;
   devices: string[];

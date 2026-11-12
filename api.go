@@ -656,8 +656,28 @@ func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
 	if _, err := a.drive.Connect(ctx); err != nil {
 		return a.sync.Status(), err
 	}
+	// The visible Anchor folder exists from the first connect, so the user
+	// sees where their sessions will go before anything is published.
+	if _, err := a.drive.RootFolder(ctx); err != nil {
+		a.log.Printf("drive: create Anchor folder: %v", err)
+	}
 	go func() { _, _ = a.sync.SyncNow(context.Background()) }()
 	return a.sync.Status(), nil
+}
+
+// SyncAvailable lists sessions other devices published to Drive that this
+// device has not pulled.
+func (a *API) SyncAvailable() ([]model.RemoteSession, error) {
+	ctx, cancel := a.ctxShort()
+	defer cancel()
+	return a.sync.Available(ctx)
+}
+
+// SyncPull fetches one published session as a local replica.
+func (a *API) SyncPull(sessionID string) (model.Session, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	return a.sync.Pull(ctx, sessionID)
 }
 
 func (a *API) SyncDisconnectDrive() error {

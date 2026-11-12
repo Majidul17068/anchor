@@ -17,6 +17,7 @@ import type {
   Notification,
   Platform,
   Project,
+  RemoteSession,
   Review,
   Session,
   Share,
@@ -247,6 +248,8 @@ export function createWailsBridge(): AnchorBridge {
       syncNow: () => call<SyncStatus>('SyncNow'),
       conflicts: () => call<Conflict[]>('SyncConflicts').then((c) => c ?? []),
       resolveConflict: (sessionId, as) => call('SyncResolveConflict', sessionId, as),
+      available: () => call<RemoteSession[]>('SyncAvailable').then((r) => r ?? []),
+      pull: (sessionId) => call<Session>('SyncPull', sessionId),
       onChange: (cb) => window.runtime!.EventsOn('sync:status', (data) => cb(data as SyncStatus)),
     },
 

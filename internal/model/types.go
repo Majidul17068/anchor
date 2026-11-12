@@ -282,6 +282,19 @@ type SyncStatus struct {
 	UsageBytes     int64  `json:"usageBytes"`
 }
 
+// RemoteSession is a session another device published to Drive that this
+// device has not pulled.
+type RemoteSession struct {
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	OriginDeviceID   string `json:"originDeviceId"`
+	OriginDeviceName string `json:"originDeviceName,omitempty"`
+	Day              string `json:"day"` // Anchor/<day>/ folder, e.g. 2026/11/12
+	StepCount        int    `json:"stepCount"`
+	UpdatedAt        string `json:"updatedAt"`
+	SizeBytes        int64  `json:"sizeBytes"`
+}
+
 type Conflict struct {
 	SessionID  string   `json:"sessionId"`
 	Devices    []string `json:"devices"`
