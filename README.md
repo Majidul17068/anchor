@@ -49,9 +49,12 @@ machines and in your own Google Drive.
   plain repository becomes one skill built from its README.
 - **Marketplace**: a public catalog of community skills (a GitHub repository,
   no server): browse, install, publish, request.
-- **Sync**: the device that created a session is its *parent source* and is
-  the only one that can publish it. Other devices pull it automatically and
-  can continue it; the parent merges their replies.
+- **Sync**: connecting Google Drive creates an `Anchor` folder in your own
+  Drive. Switch Sync on for a session and it is saved there under
+  `Anchor/YYYY/MM/DD/` (the day it was created). On any other device, sign
+  in to the same Google account, pull the session you want, and continue
+  where you left off; the device that created it (its *parent source*)
+  merges what you add and is the only one that can publish or unpublish it.
 
 ## Download
 

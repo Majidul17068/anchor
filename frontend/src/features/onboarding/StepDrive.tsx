@@ -38,12 +38,12 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
       </div>
 
       <p className="text-xs text-[var(--anchor-text-muted)] leading-relaxed">
-        Anchor uses your Google Drive hidden <code className="font-mono text-[11px] text-[var(--anchor-accent)]">appDataFolder</code> as your personal, end-to-end synchronized database. No third-party servers ever touch your sessions, tokens, or custom skills.
+        Connecting once creates an <code className="font-mono text-[11px] text-[var(--anchor-accent)]">Anchor</code> folder in your own Google Drive. Sessions you switch Sync on for are saved there under <code className="font-mono text-[11px] text-[var(--anchor-accent)]">Anchor/year/month/day</code>, and any other device signed in to the same Google account can pull them and continue where you left off. No third-party servers ever touch your sessions, tokens, or skills.
       </p>
 
       <div className="flex items-center gap-2 p-2.5 bg-[var(--anchor-surface-sunken)] rounded-lg border border-[var(--anchor-border)] text-xs text-[var(--anchor-text-subtle)]">
         <ShieldCheck className="w-4 h-4 text-[var(--anchor-ok)] shrink-0" />
-        <span>Restricted App-Data Scope: Anchor can only view and write files it creates itself.</span>
+        <span>Limited scope: Anchor can only see and write files it created itself. You grant access once; later launches reuse it.</span>
       </div>
 
       <div className="flex items-center gap-3 pt-1">

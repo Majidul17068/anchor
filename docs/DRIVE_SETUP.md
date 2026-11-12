@@ -48,12 +48,22 @@ and the Sync screen explains what is missing.
 ## 3. What goes to Drive
 
 ```
-appDataFolder/                       hidden, only Anchor can see it
-  device-<id>.json                   name, platform, last seen
-  session-<id>.json                  canonical transcript (parent source)
-  session-<id>.append-<device>.json  steps added on a replica, until merged
-Anchor/Shared skills/<skill>/        visible folder, one file per skill file
+Anchor/                                         visible folder, created on first connect
+  2026/11/12/
+    <title> (<id>).json                         canonical transcript (parent source)
+    <title> (<id>) - from <device>.json         steps added on a replica, until merged
+  Shared skills/<skill>/                        one file per skill file
+appDataFolder/                                  hidden, only Anchor can see it
+  device-<id>.json                              name, platform, last seen
 ```
 
-Tokens live in `~/.anchor/drive-token.json` (mode 0600). *Disconnect Drive*
-deletes that file; nothing is removed from Drive.
+Session files are filed under the day the session was created and tagged
+with app properties (`anchorKind`, `anchorSession`, `origin`, `anchorDay`,
+`anchorTitle`, `anchorSteps`), which is how Anchor finds them wherever they
+sit. Other devices do not download every published session: *Sync &
+Devices → Sessions on Drive from other devices* lists them and the user
+pulls the ones they want; pulled sessions then keep refreshing.
+
+You grant access once; the refresh token lives in
+`~/.anchor/drive-token.json` (mode 0600) and later launches reuse it.
+*Disconnect Drive* deletes that file; nothing is removed from Drive.

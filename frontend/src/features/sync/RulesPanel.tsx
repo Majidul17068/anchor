@@ -18,27 +18,27 @@ export const RulesPanel: React.FC = () => {
             <span>1. Parent Source Authority</span>
           </div>
           <p className="text-[var(--anchor-text-muted)] text-[11px] leading-relaxed">
-            The device on which a session was originally created owns that session&apos;s lifecycle. Only this parent device can enable sync, disable sync, or delete the session from your Google Drive database.
+            The device on which a session was originally created owns that session&apos;s lifecycle. Only this parent device can switch Sync on or off, which saves the session to, or removes it from, the Anchor folder in your Google Drive.
           </p>
         </div>
 
         <div className="p-3.5 rounded-xl bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border-subtle)] space-y-2">
           <div className="flex items-center gap-2 text-[var(--anchor-info)] font-semibold">
             <Cloud className="w-4 h-4" />
-            <span>2. Automatic Replica Pull</span>
+            <span>2. Pull What You Need</span>
           </div>
           <p className="text-[var(--anchor-text-muted)] text-[11px] leading-relaxed">
-            All other devices authenticated with your Google AI account act as replicas. They automatically download published sessions and skill updates whenever you switch devices.
+            Any other device signed in to the same Google account sees the sessions saved under Anchor/year/month/day and pulls the ones it wants. A pulled session is a replica: open it and continue where you left off; it keeps refreshing from Drive.
           </p>
         </div>
 
         <div className="p-3.5 rounded-xl bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border-subtle)] space-y-2">
           <div className="flex items-center gap-2 text-[var(--anchor-ok)] font-semibold">
             <GitMerge className="w-4 h-4" />
-            <span>3. Signed Mutation Deltas</span>
+            <span>3. Appends Merged by the Parent</span>
           </div>
           <p className="text-[var(--anchor-text-muted)] text-[11px] leading-relaxed">
-            When you run Antigravity prompts on a replica device, Anchor writes a cryptographic delta chunk. When the parent source comes online, it merges the append log without overwriting local history.
+            Messages you add on a replica are saved next to the session as an append file. When the parent device syncs, it merges them into the canonical transcript; if both sides changed in the meantime, the parent is asked to choose.
           </p>
         </div>
       </div>
