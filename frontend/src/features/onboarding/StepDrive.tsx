@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSyncStore } from '../../store/sync';
 import { Button } from '../../components/Button';
-import { DriveHelp } from '../sync/DriveHelp';
+import { DriveHelp, folderKindLabel } from '../sync/DriveHelp';
 import { CheckCircle2, HardDrive, ShieldCheck } from 'lucide-react';
 
 export interface StepDriveProps {
@@ -49,9 +49,14 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
         {syncStatus?.driveConnected ? (
           <div className="flex items-center gap-3">
             <span className="text-xs text-[var(--anchor-ok)] font-medium">
-              {syncStatus.backend === 'folder'
-                ? `Connected · Anchor folder in ${syncStatus.driveEmail ? `${syncStatus.driveEmail}'s Google Drive` : syncStatus.folderPath}`
-                : `Connected as ${syncStatus.driveEmail || 'Primary Account'}`}
+              {syncStatus.backend === 'folder' ? (
+                <span title={syncStatus.folderPath}>
+                  Connected · Anchor folder in your {folderKindLabel(syncStatus.folderKind)}
+                  {syncStatus.driveEmail ? ` (${syncStatus.driveEmail})` : ''}
+                </span>
+              ) : (
+                `Connected as ${syncStatus.driveEmail || 'Primary Account'}`
+              )}
             </span>
             <Button size="xs" variant="outline" onClick={onComplete}>
               Continue

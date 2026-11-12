@@ -214,10 +214,18 @@ export interface SyncStatus {
   /** "folder": sessions go into a synced folder on this machine (Google Drive for Desktop); "api": Drive API. */
   backend?: 'folder' | 'api';
   folderPath?: string;
+  folderKind?: 'google-drive' | 'icloud' | 'dropbox' | 'onedrive' | 'folder';
   lastSyncAt?: string;
   pending: number;
   conflicts: number;
   usageBytes: number;
+}
+
+/** A folder a cloud client keeps in sync on this machine. */
+export interface SyncFolderCandidate {
+  path: string;
+  kind: 'google-drive' | 'icloud' | 'dropbox' | 'onedrive' | 'folder';
+  label: string;
 }
 
 /** A session another device published to Drive that this one has not pulled. */

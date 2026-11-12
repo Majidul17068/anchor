@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Conflict, Device, RemoteSession, Session, SyncStatus } from '../bridge/types';
+import type { Conflict, Device, RemoteSession, Session, SyncFolderCandidate, SyncStatus } from '../bridge/types';
 import { getBridge } from '../bridge';
 
 interface SyncState {
@@ -16,8 +16,13 @@ interface SyncState {
   /** Id of the session being pulled right now. */
   pulling: string | null;
 
+  /** Synced folders detected on this machine, loaded on demand. */
+  candidates: SyncFolderCandidate[];
+
   loadSyncState: () => Promise<void>;
   chooseFolder: () => Promise<void>;
+  loadCandidates: () => Promise<void>;
+  useFolder: (path: string) => Promise<void>;
   loadAvailable: () => Promise<void>;
   pullSession: (sessionId: string) => Promise<Session | null>;
   syncNow: () => Promise<void>;
@@ -37,6 +42,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   error: null,
   available: [],
   pulling: null,
+  candidates: [],
 
   loadSyncState: async () => {
     try {
@@ -85,6 +91,26 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     } catch (e) {
       // A build without a Google OAuth client, or a cancelled consent
       // screen, must say so rather than leave the button looking dead.
+      set({ isSyncing: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+
+  loadCandidates: async () => {
+    try {
+      const bridge = getBridge();
+      set({ candidates: await bridge.sync.folderCandidates() });
+    } catch {
+      set({ candidates: [] });
+    }
+  },
+
+  useFolder: async (path: string) => {
+    set({ isSyncing: true, error: null });
+    try {
+      const bridge = getBridge();
+      const st = await bridge.sync.useFolder(path);
+      set({ status: st, isSyncing: false });
+    } catch (e) {
       set({ isSyncing: false, error: e instanceof Error ? e.message : String(e) });
     }
   },

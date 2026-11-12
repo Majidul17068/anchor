@@ -2101,6 +2101,16 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
       async chooseFolder() {
         return this.connectDrive();
       },
+      async folderCandidates() {
+        return [{ path: '/Users/me/Library/Mobile Documents/com~apple~CloudDocs', kind: 'icloud' as const, label: 'iCloud Drive' }];
+      },
+      async useFolder(path: string) {
+        const st = await this.connectDrive();
+        st.folderPath = path;
+        st.folderKind = path.includes('CloudDocs') ? 'icloud' : 'folder';
+        syncStatus = st;
+        return st;
+      },
       async disconnectDrive() {
         syncStatus = {
           driveConnected: false,

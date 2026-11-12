@@ -24,6 +24,7 @@ import type {
   Skill,
   SkillRequest,
   Step,
+  SyncFolderCandidate,
   SyncStatus,
 } from './types';
 
@@ -245,6 +246,8 @@ export function createWailsBridge(): AnchorBridge {
       status: () => call<SyncStatus>('SyncStatus'),
       connectDrive: () => call<SyncStatus>('SyncConnectDrive'),
       chooseFolder: () => call<SyncStatus>('SyncChooseFolder'),
+      folderCandidates: () => call<SyncFolderCandidate[]>('SyncFolderCandidates').then((c) => c ?? []),
+      useFolder: (path) => call<SyncStatus>('SyncUseFolder', path),
       disconnectDrive: () => call('SyncDisconnectDrive'),
       syncNow: () => call<SyncStatus>('SyncNow'),
       conflicts: () => call<Conflict[]>('SyncConflicts').then((c) => c ?? []),

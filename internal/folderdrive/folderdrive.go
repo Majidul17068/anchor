@@ -121,7 +121,7 @@ func Candidates() []Candidate {
 	var out []Candidate
 	add := func(path, kind string) {
 		if st, err := os.Stat(path); err == nil && st.IsDir() {
-			out = append(out, Candidate{Path: path, Kind: kind})
+			out = append(out, Candidate{Path: path, Kind: kind, Label: Label(kind)})
 		}
 	}
 	switch runtime.GOOS {
@@ -163,8 +163,50 @@ func Candidates() []Candidate {
 }
 
 type Candidate struct {
-	Path string `json:"path"`
-	Kind string `json:"kind"` // google-drive | onedrive | dropbox | icloud | folder
+	Path  string `json:"path"`
+	Kind  string `json:"kind"` // google-drive | onedrive | dropbox | icloud | folder
+	Label string `json:"label"`
+}
+
+// KindOf guesses which cloud client keeps a folder in sync, from its path.
+func KindOf(path string) string {
+	p := strings.ToLower(filepath.ToSlash(path))
+	switch {
+	case strings.Contains(p, "googledrive-"), strings.Contains(p, "google drive"), strings.Contains(p, "/my drive"), strings.Contains(p, "googledrive"), strings.Contains(p, "google-drive"):
+		return "google-drive"
+	case strings.Contains(p, "com~apple~clouddocs"):
+		return "icloud"
+	case strings.Contains(p, "dropbox"):
+		return "dropbox"
+	case strings.Contains(p, "onedrive"):
+		return "onedrive"
+	}
+	return "folder"
+}
+
+// Label is the human name for a kind.
+func Label(kind string) string {
+	switch kind {
+	case "google-drive":
+		return "Google Drive"
+	case "icloud":
+		return "iCloud Drive"
+	case "dropbox":
+		return "Dropbox"
+	case "onedrive":
+		return "OneDrive"
+	}
+	return "synced folder"
+}
+
+// GoogleDrive returns the first Google Drive candidate, if any.
+func GoogleDrive(c []Candidate) (Candidate, bool) {
+	for _, x := range c {
+		if x.Kind == "google-drive" {
+			return x, true
+		}
+	}
+	return Candidate{}, false
 }
 
 // ---------------------------------------------------------------------------

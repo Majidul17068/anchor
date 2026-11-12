@@ -280,6 +280,7 @@ type SyncStatus struct {
 	// this machine (Google Drive for Desktop etc.), "api" for the Drive API.
 	Backend    string `json:"backend,omitempty"`
 	FolderPath string `json:"folderPath,omitempty"`
+	FolderKind string `json:"folderKind,omitempty"` // google-drive | icloud | dropbox | onedrive | folder
 	LastSyncAt     string `json:"lastSyncAt,omitempty"`
 	Pending        int    `json:"pending"`
 	Conflicts      int    `json:"conflicts"`

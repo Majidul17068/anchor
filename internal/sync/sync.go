@@ -60,8 +60,9 @@ var _ Drive = (*drive.Service)(nil)
 type Engine struct {
 	st      *store.Store
 	drv     Drive
-	backend string // "api" (Drive API) or "folder" (a synced folder on disk)
-	folder  string // path of the synced folder when backend is "folder"
+	backend    string // "api" (Drive API) or "folder" (a synced folder on disk)
+	folder     string // path of the synced folder when backend is "folder"
+	folderKind string // which cloud client keeps that folder in sync
 	emit    func(string, any)
 	logf    func(string, ...any)
 	mu      gosync.Mutex
@@ -72,12 +73,13 @@ type Engine struct {
 }
 
 // SetDrive switches the storage backend. backend is "api" or "folder";
-// folder is the synced folder's path for the latter.
-func (e *Engine) SetDrive(d Drive, backend, folder string) {
+// folder is the synced folder's path for the latter and folderKind the
+// cloud client that syncs it (google-drive, icloud, dropbox, onedrive).
+func (e *Engine) SetDrive(d Drive, backend, folder, folderKind string) {
 	e.runMu.Lock()
 	defer e.runMu.Unlock()
 	e.mu.Lock()
-	e.drv, e.backend, e.folder = d, backend, folder
+	e.drv, e.backend, e.folder, e.folderKind = d, backend, folder, folderKind
 	e.mu.Unlock()
 }
 
@@ -157,6 +159,9 @@ func (e *Engine) Status() model.SyncStatus {
 	st.DriveEmail = e.drv.Email()
 	st.Backend = e.backend
 	st.FolderPath = e.folder
+	if e.folder != "" {
+		st.FolderKind = e.folderKind
+	}
 	st.Pending = e.pendingLocked()
 	st.Conflicts = e.unresolvedLocked()
 	return st

@@ -20,6 +20,7 @@ import type {
   Skill,
   SkillRequest,
   Step,
+  SyncFolderCandidate,
   SyncStatus,
 } from './types';
 import { createMockBridge } from './mock';
@@ -160,6 +161,10 @@ export interface AnchorBridge {
     connectDrive(): Promise<SyncStatus>;
     /** Point Anchor at a synced folder by hand (when none was detected). */
     chooseFolder(): Promise<SyncStatus>;
+    /** Synced folders detected on this machine (Google Drive, iCloud, Dropbox, OneDrive). */
+    folderCandidates(): Promise<SyncFolderCandidate[]>;
+    /** Use one of them (or any folder path). */
+    useFolder(path: string): Promise<SyncStatus>;
     disconnectDrive(): Promise<void>;
     syncNow(): Promise<SyncStatus>;
     conflicts(): Promise<Conflict[]>;

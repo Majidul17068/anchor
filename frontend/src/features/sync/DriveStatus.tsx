@@ -5,7 +5,7 @@ import { Badge } from '../../components/Badge';
 import { formatBytes, formatRelativeDate } from '../../lib/format';
 import { PlanLock, useFeature } from '../../components/PlanGate';
 import { useSyncStore } from '../../store/sync';
-import { DriveHelp } from './DriveHelp';
+import { DriveHelp, folderKindLabel } from './DriveHelp';
 import { Cloud, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export interface DriveStatusProps {
@@ -46,14 +46,16 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
               <h3 className="text-base font-semibold text-[var(--anchor-text)]">
                 Google Drive
               </h3>
-              <Badge variant={isConnected ? 'ok' : 'default'} size="xs">
-                {isConnected ? 'Active & Linked' : 'Disconnected'}
-              </Badge>
+              <span title={status?.folderPath}>
+                <Badge variant={isConnected ? 'ok' : 'default'} size="xs">
+                  {isConnected ? (status?.backend === 'folder' ? folderKindLabel(status.folderKind) : 'Connected') : 'Disconnected'}
+                </Badge>
+              </span>
             </div>
             <p className="text-xs text-[var(--anchor-text-muted)]">
               {isConnected
                 ? status?.backend === 'folder'
-                  ? `Sessions are saved to the Anchor folder in ${status.driveEmail ? `${status.driveEmail}'s Google Drive` : status.folderPath}; Google Drive for Desktop keeps it in sync.`
+                  ? `Sessions are saved to the Anchor folder in your ${folderKindLabel(status.folderKind)}${status.driveEmail ? ` (${status.driveEmail})` : ''}; its desktop client keeps it in sync.`
                   : `Synchronizing sessions & skills directly with ${status?.driveEmail || 'your Google account'}`
                 : 'Connect your Google Drive: an Anchor folder is created in it and your sessions are saved there, filed by day.'}
             </p>

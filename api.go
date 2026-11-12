@@ -90,7 +90,7 @@ func NewAPI(version string, logger *log.Logger) *API {
 	a.folder = folderdrive.New(st.SettingString("syncFolder"))
 	a.sync = anchorsync.New(st, a.drive, a.emit, logf)
 	if a.folder.Connected() {
-		a.sync.SetDrive(a.folder, "folder", a.folder.Root())
+		a.sync.SetDrive(a.folder, "folder", a.folder.Root(), folderdrive.KindOf(a.folder.Root()))
 	}
 	me := func() model.MarketAuthor {
 		if acc := a.eng.AuthStatus(); acc != nil {
@@ -666,8 +666,11 @@ func (a *API) SyncStatus() model.SyncStatus { return a.sync.Status() }
 //  3. otherwise an error telling the user to install Drive for Desktop or
 //     choose a synced folder (SyncChooseFolder).
 func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
-	if cands := folderdrive.Candidates(); len(cands) > 0 {
-		return a.useFolder(cands[0].Path)
+	cands := folderdrive.Candidates()
+	// Only Google Drive is taken without asking: the button says Google
+	// Drive. Other clouds found on the machine are offered, not assumed.
+	if gd, ok := folderdrive.GoogleDrive(cands); ok {
+		return a.useFolder(gd.Path)
 	}
 	if a.drive.Configured() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -680,11 +683,28 @@ func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
 		if _, err := a.drive.RootFolder(ctx); err != nil {
 			a.log.Printf("drive: create Anchor folder: %v", err)
 		}
-		a.sync.SetDrive(a.drive, "api", "")
+		a.sync.SetDrive(a.drive, "api", "", "")
 		go func() { _, _ = a.sync.SyncNow(context.Background()) }()
 		return a.sync.Status(), nil
 	}
-	return a.sync.Status(), errors.New("DRIVE_NOT_FOUND: Google Drive for Desktop is not installed on this computer. Install it from https://www.google.com/drive/download/ and sign in, then click Connect again — or choose any folder your cloud client keeps in sync.")
+	msg := "DRIVE_NOT_FOUND: Google Drive for Desktop is not installed on this computer. Install it from https://www.google.com/drive/download/ and sign in, then click Connect again"
+	if len(cands) > 0 {
+		var names []string
+		for _, c := range cands {
+			names = append(names, c.Label)
+		}
+		msg += " — or use " + strings.Join(names, " / ") + " found on this computer"
+	}
+	return a.sync.Status(), errors.New(msg + ", or choose any folder your cloud client keeps in sync.")
+}
+
+// SyncUseFolder points Anchor at a detected synced folder (see
+// SyncFolderCandidates) or any folder path.
+func (a *API) SyncUseFolder(path string) (model.SyncStatus, error) {
+	if strings.TrimSpace(path) == "" {
+		return a.sync.Status(), errors.New("no folder given")
+	}
+	return a.useFolder(path)
 }
 
 // SyncChooseFolder lets the user point Anchor at a synced folder by hand.
@@ -717,7 +737,7 @@ func (a *API) useFolder(path string) (model.SyncStatus, error) {
 	if err := a.st.SetSettings(map[string]any{"syncFolder": path}); err != nil {
 		return a.sync.Status(), err
 	}
-	a.sync.SetDrive(a.folder, "folder", path)
+	a.sync.SetDrive(a.folder, "folder", path, folderdrive.KindOf(path))
 	a.emit("sync:status", a.sync.Status())
 	go func() { _, _ = a.sync.SyncNow(context.Background()) }()
 	return a.sync.Status(), nil
@@ -743,7 +763,7 @@ func (a *API) SyncDisconnectDrive() error {
 	if a.folder.Connected() {
 		a.folder.SetRoot("")
 		err = a.st.SetSettings(map[string]any{"syncFolder": ""})
-		a.sync.SetDrive(a.drive, "api", "")
+		a.sync.SetDrive(a.drive, "api", "", "")
 	} else {
 		err = a.drive.Disconnect()
 	}
