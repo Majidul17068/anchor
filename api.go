@@ -203,7 +203,15 @@ func (a *API) AuthLogin() (*model.Account, error) {
 	if _, ok := a.loc.Find(); !ok {
 		return nil, errors.New("install the Antigravity CLI first")
 	}
-	return a.eng.Login()
+	acc, err := a.eng.Login()
+	// The browser took focus for Google's consent screen; its callback page
+	// only says "return to your IDE", so bring Anchor back ourselves.
+	if a.ctx != nil {
+		runtime.WindowUnminimise(a.ctx)
+		runtime.WindowShow(a.ctx)
+		runtime.Show(a.ctx)
+	}
+	return acc, err
 }
 
 func (a *API) AuthLogout() error { return a.eng.Logout() }
