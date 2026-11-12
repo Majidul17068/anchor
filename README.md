@@ -76,8 +76,12 @@ scripting (`anchorctl doctor`, `anchorctl sessions`, `anchorctl chat new "…"`)
 2. **Sign in with Google**: the CLI opens your browser; use the account that
    holds your Google AI subscription. Anchor shows the tier it reports.
 3. **Name this device**: it becomes the parent source for sessions you create here.
-4. **Connect Google Drive** (optional): enables sync and skill sharing. See
-   [docs/DRIVE_SETUP.md](docs/DRIVE_SETUP.md) if your build has no OAuth client id yet.
+4. **Connect Google Drive** (optional): with
+   [Google Drive for Desktop](https://www.google.com/drive/download/) installed,
+   one click creates an `Anchor` folder in your Drive and your synced sessions
+   are saved there, filed by day — nothing to register. Any other synced folder
+   (Dropbox, OneDrive, iCloud) works too. Details and the Drive-API alternative:
+   [docs/DRIVE_SETUP.md](docs/DRIVE_SETUP.md).
 
 ## How it is built
 

@@ -1,15 +1,36 @@
-# Google Drive sync: one-time OAuth setup
+# Google Drive sync
 
-Anchor stores synced sessions in each user's **own** Google Drive, inside the
-hidden `appDataFolder`, and shares skills through a visible `Anchor/Shared
-skills` folder. No Anchor server is involved. Google still needs to know which
-application is asking, so a release of Anchor must carry an OAuth client id.
+Anchor backs sessions up to each user's **own** Google Drive, in a visible
+`Anchor/` folder filed by day. No Anchor server is involved. There are two
+ways to reach Drive; the first needs no setup from anyone.
 
-You create that client once, for free, in Google Cloud Console. Every user of
-your builds then signs in with their own account; the client id only
-identifies the app.
+## Default: Google Drive for Desktop (no registration)
 
-## 1. Create the OAuth client
+If [Google Drive for Desktop](https://www.google.com/drive/download/) is
+installed and signed in, the user's Drive is a folder on the machine
+(`~/Library/CloudStorage/GoogleDrive-<email>/My Drive` on macOS, a drive
+letter such as `G:\My Drive` on Windows). **Connect Google Drive** finds it,
+creates `Anchor/` inside it, and writes sessions there as plain files;
+Google's own client uploads them. On another computer with Drive for
+Desktop and the same account, the same folder is there and *Sync & Devices*
+lists the sessions to pull.
+
+Any folder another cloud client keeps in sync works the same way (Dropbox,
+OneDrive, iCloud Drive): *Choose a synced folder…* points Anchor at it. The
+chosen folder is remembered in `~/.anchor/settings.json` (`syncFolder`).
+
+Drive for Desktop is not available on Linux; use another synced folder, or
+the API route below.
+
+## Alternative: the Drive API (needs a one-time OAuth client)
+
+Without a synced folder Anchor can talk to the Drive API directly, but
+Google must know which application is asking, so the build must carry an
+OAuth client id. The developer creates that client once, for free, in
+Google Cloud Console; users never see it — they get Google's consent screen
+on Connect and nothing else.
+
+### 1. Create the OAuth client
 
 1. Open <https://console.cloud.google.com/> and create a project (for example
    `anchor-desktop`).
