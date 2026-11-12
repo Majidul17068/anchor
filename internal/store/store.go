@@ -207,6 +207,45 @@ func (s *Store) DeleteSession(id string) error {
 	return err
 }
 
+// Deleted sessions. The Antigravity CLI offers no way to delete a
+// conversation over ACP, so a session deleted in Anchor would be re-created
+// from the CLI's list on the next refresh. A tombstone records the id and
+// the conversation's last-modified time at deletion: the session stays
+// hidden unless the CLI later reports newer activity on it (continued from
+// the terminal), at which point it is shown again.
+
+func (s *Store) deletedPath() string { return filepath.Join(paths.AnchorDir(), "deleted-sessions.json") }
+
+// DeletedSessions returns id -> lastModified at the time of deletion.
+func (s *Store) DeletedSessions() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]string{}
+	_ = readJSON(s.deletedPath(), &out)
+	return out
+}
+
+func (s *Store) MarkDeleted(id, lastModified string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := map[string]string{}
+	_ = readJSON(s.deletedPath(), &m)
+	m[id] = lastModified
+	return writeJSON(s.deletedPath(), m)
+}
+
+func (s *Store) Undelete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := map[string]string{}
+	_ = readJSON(s.deletedPath(), &m)
+	if _, ok := m[id]; !ok {
+		return nil
+	}
+	delete(m, id)
+	return writeJSON(s.deletedPath(), m)
+}
+
 func (s *Store) ListSessions() []*SessionMeta {
 	s.mu.Lock()
 	defer s.mu.Unlock()

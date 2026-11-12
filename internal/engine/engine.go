@@ -575,7 +575,14 @@ func (e *Engine) ListSessions() ([]model.Session, error) {
 	}
 	seen := map[string]bool{}
 	dev := e.deviceID()
+	deleted := e.st.DeletedSessions()
 	for _, info := range infos {
+		if at, gone := deleted[info.SessionID]; gone {
+			if info.UpdatedAt <= at {
+				continue // deleted in Anchor; the CLI still lists it
+			}
+			_ = e.st.Undelete(info.SessionID) // continued from the terminal since
+		}
 		seen[info.SessionID] = true
 		m, ok := metas[info.SessionID]
 		if !ok {
@@ -892,9 +899,15 @@ func (e *Engine) SetSync(id string, enabled bool) (model.Session, error) {
 	return e.view(meta), nil
 }
 
+// Delete removes a session from Anchor. The CLI keeps the conversation (it
+// has no delete over ACP); a tombstone keeps it out of the list unless the
+// terminal adds to it later.
 func (e *Engine) Delete(id string) error {
 	meta, err := e.st.GetSession(id)
 	if err == nil {
+		if meta.ACPSessionID != "" {
+			_ = e.st.MarkDeleted(meta.ACPSessionID, meta.LastModified)
+		}
 		if l := e.getLive(id); l != nil {
 			l.mu.Lock()
 			if l.attached && l.proc != nil {

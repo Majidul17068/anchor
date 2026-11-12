@@ -91,7 +91,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onOpenSession }) => {
   const handleDelete = async (s: Session) => {
     const ok = await confirmDialog({
       title: `Delete session "${s.title}"?`,
-      message: 'Removed from this device and from the Antigravity CLI.',
+      message: 'Removed from Anchor on this device. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.',
       confirmLabel: 'Delete',
       danger: true,
     });

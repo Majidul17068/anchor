@@ -41,7 +41,7 @@ export const SessionRow: React.FC<SessionRowProps> = ({
     e.stopPropagation();
     const ok = await confirmDialog({
       title: `Delete session "${session.title}"?`,
-      message: 'The conversation is removed from this device and from the Antigravity CLI.',
+      message: 'Removed from Anchor on this device. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.',
       confirmLabel: 'Delete',
       danger: true,
     });

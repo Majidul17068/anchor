@@ -41,6 +41,10 @@ export const Transcript: React.FC<TranscriptProps> = ({
     el.scrollTop = el.scrollHeight;
   }, [steps, isStreaming]);
 
+  // Nothing from the agent yet for the turn in flight.
+  const last = steps[steps.length - 1];
+  const waiting = Boolean(isStreaming) && (!last || last.kind === 'user');
+
   if (steps.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -129,7 +133,29 @@ export const Transcript: React.FC<TranscriptProps> = ({
         return null;
       })}
 
+      {waiting && <WaitingRow />}
+
       <div ref={bottomRef} />
+    </div>
+  );
+};
+
+/**
+ * Shown between sending and the first chunk of the reply. The CLI often
+ * delivers a short answer as one chunk at the very end, so without this the
+ * screen is blank for the whole generation and the app looks hung.
+ */
+const WaitingRow: React.FC = () => {
+  const [seconds, setSeconds] = React.useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const t = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--anchor-text-subtle)]" role="status">
+      <span className="w-3 h-3 rounded-full border-2 border-[var(--anchor-accent)] border-t-transparent animate-spin" />
+      <span>Antigravity is working{seconds >= 3 ? ` · ${seconds}s` : '…'}</span>
     </div>
   );
 };
