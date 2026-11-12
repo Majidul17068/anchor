@@ -29,9 +29,23 @@ const (
 	pollInterval = 30 * time.Second
 )
 
+// Drive is the slice of the Google Drive client the sync engine needs. It
+// is an interface so the push/pull cycle can be exercised against an
+// in-memory drive in tests, without a Google OAuth client.
+type Drive interface {
+	Connected() bool
+	Email() string
+	ListApp(ctx context.Context, prefix string) ([]drive.File, error)
+	PutApp(ctx context.Context, name string, props map[string]string, content []byte) (drive.File, error)
+	Get(ctx context.Context, id string) ([]byte, error)
+	Delete(ctx context.Context, id string) error
+}
+
+var _ Drive = (*drive.Service)(nil)
+
 type Engine struct {
 	st     *store.Store
-	drv    *drive.Service
+	drv    Drive
 	emit   func(string, any)
 	logf   func(string, ...any)
 	mu     gosync.Mutex
@@ -60,7 +74,7 @@ type remoteDevice struct {
 	model.Device
 }
 
-func New(st *store.Store, drv *drive.Service, emit func(string, any), logf func(string, ...any)) *Engine {
+func New(st *store.Store, drv Drive, emit func(string, any), logf func(string, ...any)) *Engine {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}

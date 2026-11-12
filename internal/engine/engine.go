@@ -885,6 +885,17 @@ func (e *Engine) SetSync(id string, enabled bool) (model.Session, error) {
 	if meta.OriginDeviceID != e.deviceID() {
 		return model.Session{}, ErrNotParentSource
 	}
+	if enabled {
+		// The push uploads the cached transcript. A session listed from the
+		// CLI but never opened in Anchor has no cache yet; load it now so the
+		// first publish carries the conversation rather than an empty one.
+		if _, _, err := e.GetSession(id); err != nil {
+			e.logf("sync %s: transcript not loaded before publish: %v", id, err)
+		}
+		if meta, err = e.st.GetSession(id); err != nil {
+			return model.Session{}, errors.New("session not found")
+		}
+	}
 	meta.SyncEnabled = enabled
 	if enabled {
 		meta.SyncState = model.SyncPublished
