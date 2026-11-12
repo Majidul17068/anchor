@@ -38,7 +38,7 @@ Any of these work; the first match wins:
 
 | Where | How |
 |---|---|
-| Settings (per machine) | Add `driveClientId` and `driveClientSecret` through *Settings → Advanced* (or edit `~/.anchor/settings.json`). |
+| Settings (per machine) | Paste them into *Settings → Google Drive OAuth client* (stored as `driveClientId` / `driveClientSecret` in `~/.anchor/settings.json`). |
 | Environment | `ANCHOR_GOOGLE_CLIENT_ID` and `ANCHOR_GOOGLE_CLIENT_SECRET` when launching Anchor. |
 | Release builds | GitHub repository secrets `ANCHOR_GOOGLE_CLIENT_ID` and `ANCHOR_GOOGLE_CLIENT_SECRET`; the build workflow bakes them in with `-ldflags`. |
 
