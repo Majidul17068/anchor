@@ -141,7 +141,8 @@ func Candidates() []Candidate {
 		add(filepath.Join(home, "Google Drive", "My Drive"), "google-drive") // older client
 		add(filepath.Join(home, "Google Drive"), "google-drive")
 		add(filepath.Join(home, "Dropbox"), "dropbox")
-		add(filepath.Join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"), "icloud")
+		// iCloud Drive is deliberately not detected: Anchor is a Google Drive
+		// product. A user who wants iCloud can still pick the folder by hand.
 	case "windows":
 		// Drive for Desktop mounts a drive letter with "My Drive" at its root.
 		for _, letter := range "GHIJKLMNOPQRSTUVWXYZ" {
