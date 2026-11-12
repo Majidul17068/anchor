@@ -18,6 +18,7 @@ import (
 	"github.com/Majidul17068/anchor/internal/cli"
 	"github.com/Majidul17068/anchor/internal/drive"
 	"github.com/Majidul17068/anchor/internal/engine"
+	"github.com/Majidul17068/anchor/internal/folderdrive"
 	"github.com/Majidul17068/anchor/internal/market"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/paths"
@@ -41,6 +42,7 @@ type API struct {
 	skills *skills.Service
 	agents *agents.Service
 	drive  *drive.Service
+	folder *folderdrive.Service
 	sync   *anchorsync.Engine
 	market *market.Service
 
@@ -81,7 +83,15 @@ func NewAPI(version string, logger *log.Logger) *API {
 	})
 	a.agents = agents.New(a.loc)
 	a.drive = drive.New(st, a.openURL, logf)
+	// Two ways to reach the user's Google Drive: a synced folder on this
+	// machine (Google Drive for Desktop; no app registration needed) or the
+	// Drive API (needs an OAuth client id in the build). The folder wins
+	// when one was chosen.
+	a.folder = folderdrive.New(st.SettingString("syncFolder"))
 	a.sync = anchorsync.New(st, a.drive, a.emit, logf)
+	if a.folder.Connected() {
+		a.sync.SetDrive(a.folder, "folder", a.folder.Root())
+	}
 	me := func() model.MarketAuthor {
 		if acc := a.eng.AuthStatus(); acc != nil {
 			return model.MarketAuthor{ID: acc.Email, Name: acc.Name, AvatarURL: acc.AvatarURL}
@@ -647,20 +657,68 @@ func (a *API) MarketMarkRead(ids []string) error { return a.market.MarkRead(ids)
 
 func (a *API) SyncStatus() model.SyncStatus { return a.sync.Status() }
 
+// SyncConnectDrive connects Google Drive the simplest way available:
+//
+//  1. a Google Drive for Desktop folder on this machine (or another synced
+//     folder): nothing to register, the user just confirms; Anchor creates
+//     the visible Anchor/ folder inside it;
+//  2. otherwise the Drive API, when the build carries an OAuth client id;
+//  3. otherwise an error telling the user to install Drive for Desktop or
+//     choose a synced folder (SyncChooseFolder).
 func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
-	if !a.drive.Configured() {
-		return a.sync.Status(), errors.New("DRIVE_NOT_CONFIGURED: this build has no Google OAuth client id. Add it under Settings → Google Drive OAuth client, or see docs/DRIVE_SETUP.md.")
+	if cands := folderdrive.Candidates(); len(cands) > 0 {
+		return a.useFolder(cands[0].Path)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	if _, err := a.drive.Connect(ctx); err != nil {
+	if a.drive.Configured() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if _, err := a.drive.Connect(ctx); err != nil {
+			return a.sync.Status(), err
+		}
+		// The visible Anchor folder exists from the first connect, so the
+		// user sees where their sessions will go before anything is published.
+		if _, err := a.drive.RootFolder(ctx); err != nil {
+			a.log.Printf("drive: create Anchor folder: %v", err)
+		}
+		a.sync.SetDrive(a.drive, "api", "")
+		go func() { _, _ = a.sync.SyncNow(context.Background()) }()
+		return a.sync.Status(), nil
+	}
+	return a.sync.Status(), errors.New("DRIVE_NOT_FOUND: Google Drive for Desktop is not installed on this computer. Install it from https://www.google.com/drive/download/ and sign in, then click Connect again — or choose any folder your cloud client keeps in sync.")
+}
+
+// SyncChooseFolder lets the user point Anchor at a synced folder by hand.
+func (a *API) SyncChooseFolder() (model.SyncStatus, error) {
+	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Choose the folder your Google Drive (or other cloud) client keeps in sync", DefaultDirectory: paths.Home()})
+	if err != nil {
 		return a.sync.Status(), err
 	}
-	// The visible Anchor folder exists from the first connect, so the user
-	// sees where their sessions will go before anything is published.
-	if _, err := a.drive.RootFolder(ctx); err != nil {
-		a.log.Printf("drive: create Anchor folder: %v", err)
+	if path == "" {
+		return a.sync.Status(), nil
 	}
+	return a.useFolder(path)
+}
+
+// SyncFolderCandidates lists synced folders detected on this machine.
+func (a *API) SyncFolderCandidates() []folderdrive.Candidate {
+	c := folderdrive.Candidates()
+	if c == nil {
+		c = []folderdrive.Candidate{}
+	}
+	return c
+}
+
+func (a *API) useFolder(path string) (model.SyncStatus, error) {
+	a.folder.SetRoot(path)
+	if err := a.folder.Ensure(); err != nil {
+		a.folder.SetRoot("")
+		return a.sync.Status(), fmt.Errorf("cannot create the Anchor folder in %s: %w", path, err)
+	}
+	if err := a.st.SetSettings(map[string]any{"syncFolder": path}); err != nil {
+		return a.sync.Status(), err
+	}
+	a.sync.SetDrive(a.folder, "folder", path)
+	a.emit("sync:status", a.sync.Status())
 	go func() { _, _ = a.sync.SyncNow(context.Background()) }()
 	return a.sync.Status(), nil
 }
@@ -681,13 +739,20 @@ func (a *API) SyncPull(sessionID string) (model.Session, error) {
 }
 
 func (a *API) SyncDisconnectDrive() error {
-	err := a.drive.Disconnect()
+	var err error
+	if a.folder.Connected() {
+		a.folder.SetRoot("")
+		err = a.st.SetSettings(map[string]any{"syncFolder": ""})
+		a.sync.SetDrive(a.drive, "api", "")
+	} else {
+		err = a.drive.Disconnect()
+	}
 	a.emit("sync:status", a.sync.Status())
 	return err
 }
 
 func (a *API) SyncNow() (model.SyncStatus, error) {
-	if !a.drive.Connected() {
+	if !a.sync.Status().DriveConnected {
 		return a.sync.Status(), errors.New("DRIVE_NOT_CONNECTED: connect Google Drive first")
 	}
 	return a.sync.SyncNow(context.Background())
@@ -706,6 +771,7 @@ func (a *API) SettingsGet() map[string]any {
 	s["version"] = a.version
 	s["anchorDir"] = paths.AnchorDir()
 	s["driveConfigured"] = a.drive.Configured()
+	s["syncFolder"] = a.folder.Root()
 	s["marketIndexUrlDefault"] = market.DefaultIndexURL
 	if _, ok := s["telemetryEnabled"]; !ok {
 		s["telemetryEnabled"] = true

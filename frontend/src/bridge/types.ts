@@ -211,6 +211,9 @@ export interface Notification {
 export interface SyncStatus {
   driveConnected: boolean;
   driveEmail?: string;
+  /** "folder": sessions go into a synced folder on this machine (Google Drive for Desktop); "api": Drive API. */
+  backend?: 'folder' | 'api';
+  folderPath?: string;
   lastSyncAt?: string;
   pending: number;
   conflicts: number;

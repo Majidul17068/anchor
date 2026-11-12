@@ -244,6 +244,7 @@ export function createWailsBridge(): AnchorBridge {
     sync: {
       status: () => call<SyncStatus>('SyncStatus'),
       connectDrive: () => call<SyncStatus>('SyncConnectDrive'),
+      chooseFolder: () => call<SyncStatus>('SyncChooseFolder'),
       disconnectDrive: () => call('SyncDisconnectDrive'),
       syncNow: () => call<SyncStatus>('SyncNow'),
       conflicts: () => call<Conflict[]>('SyncConflicts').then((c) => c ?? []),

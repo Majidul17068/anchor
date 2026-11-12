@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSyncStore } from '../../store/sync';
 import { Button } from '../../components/Button';
+import { DriveHelp } from '../sync/DriveHelp';
 import { CheckCircle2, HardDrive, ShieldCheck } from 'lucide-react';
 
 export interface StepDriveProps {
@@ -18,8 +19,6 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
     await connectDrive();
     if (useSyncStore.getState().status?.driveConnected) onComplete();
   };
-
-  const notConfigured = error?.startsWith('DRIVE_NOT_CONFIGURED');
 
   return (
     <div className="flex flex-col gap-3 text-left">
@@ -50,7 +49,9 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
         {syncStatus?.driveConnected ? (
           <div className="flex items-center gap-3">
             <span className="text-xs text-[var(--anchor-ok)] font-medium">
-              Connected as {syncStatus.driveEmail || 'Primary Account'}
+              {syncStatus.backend === 'folder'
+                ? `Connected · Anchor folder in ${syncStatus.driveEmail ? `${syncStatus.driveEmail}'s Google Drive` : syncStatus.folderPath}`
+                : `Connected as ${syncStatus.driveEmail || 'Primary Account'}`}
             </span>
             <Button size="xs" variant="outline" onClick={onComplete}>
               Continue
@@ -73,13 +74,7 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
         )}
       </div>
 
-      {error && (
-        <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">
-          {notConfigured
-            ? 'This build has no Google OAuth client, so Drive sync cannot be enabled yet. You can skip this step; add the client id later under Settings → Google Drive, or build Anchor with one (docs/DRIVE_SETUP.md).'
-            : error}
-        </p>
-      )}
+      {error && <DriveHelp error={error} />}
     </div>
   );
 };

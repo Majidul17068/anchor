@@ -3,13 +3,16 @@ package sync
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	gosync "sync"
 	"testing"
 	"time"
 
 	"github.com/Majidul17068/anchor/internal/drive"
+	"github.com/Majidul17068/anchor/internal/folderdrive"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/store"
 )
@@ -191,9 +194,54 @@ func TestSessionsStayLocalUntilSyncIsEnabled(t *testing.T) {
 	}
 }
 
-func TestPublishListPullAppendMergeUnpublish(t *testing.T) {
+// probe lets the cycle test look at what landed on the drive, whichever
+// backend is under test.
+type probe interface {
+	Drive
+	has(substr string) bool
+	paths() []string
+}
+
+// folderProbe wraps the on-disk backend used with Google Drive for Desktop.
+type folderProbe struct {
+	*folderdrive.Service
+	root string
+}
+
+func (f folderProbe) paths() []string {
+	var out []string
+	_ = filepath.WalkDir(f.root, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(f.root, p)
+			out = append(out, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	return out
+}
+
+func (f folderProbe) has(substr string) bool {
+	for _, p := range f.paths() {
+		if strings.Contains(p, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPublishListPullAppendMergeUnpublish_API(t *testing.T) {
+	runCycle(t, newFakeDrive())
+}
+
+// The same cycle through a synced folder on disk: two devices sharing one
+// Drive for Desktop folder (what Google syncs between machines).
+func TestPublishListPullAppendMergeUnpublish_Folder(t *testing.T) {
+	root := t.TempDir()
+	runCycle(t, folderProbe{folderdrive.New(root), root})
+}
+
+func runCycle(t *testing.T, drv probe) {
 	t.Setenv("ANCHOR_HOME", "")
-	drv := newFakeDrive()
 	a := newDevice(t, "A", drv)
 	b := newDevice(t, "B", drv)
 	if a.id == b.id {

@@ -158,6 +158,8 @@ export interface AnchorBridge {
   sync: {
     status(): Promise<SyncStatus>;
     connectDrive(): Promise<SyncStatus>;
+    /** Point Anchor at a synced folder by hand (when none was detected). */
+    chooseFolder(): Promise<SyncStatus>;
     disconnectDrive(): Promise<void>;
     syncNow(): Promise<SyncStatus>;
     conflicts(): Promise<Conflict[]>;

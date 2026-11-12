@@ -2088,6 +2088,8 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         syncStatus = {
           driveConnected: true,
           driveEmail: 'majidulislam17068@gmail.com',
+          backend: 'folder',
+          folderPath: '/Users/me/Library/CloudStorage/GoogleDrive-majidulislam17068@gmail.com/My Drive',
           lastSyncAt: new Date().toISOString(),
           pending: 0,
           conflicts: 0,
@@ -2095,6 +2097,9 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         };
         notifySync();
         return { ...syncStatus };
+      },
+      async chooseFolder() {
+        return this.connectDrive();
       },
       async disconnectDrive() {
         syncStatus = {

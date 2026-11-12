@@ -17,6 +17,7 @@ interface SyncState {
   pulling: string | null;
 
   loadSyncState: () => Promise<void>;
+  chooseFolder: () => Promise<void>;
   loadAvailable: () => Promise<void>;
   pullSession: (sessionId: string) => Promise<Session | null>;
   syncNow: () => Promise<void>;
@@ -84,6 +85,17 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     } catch (e) {
       // A build without a Google OAuth client, or a cancelled consent
       // screen, must say so rather than leave the button looking dead.
+      set({ isSyncing: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+
+  chooseFolder: async () => {
+    set({ isSyncing: true, error: null });
+    try {
+      const bridge = getBridge();
+      const st = await bridge.sync.chooseFolder();
+      set({ status: st, isSyncing: false });
+    } catch (e) {
       set({ isSyncing: false, error: e instanceof Error ? e.message : String(e) });
     }
   },

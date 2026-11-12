@@ -58,15 +58,27 @@ type Drive interface {
 var _ Drive = (*drive.Service)(nil)
 
 type Engine struct {
-	st     *store.Store
-	drv    Drive
-	emit   func(string, any)
-	logf   func(string, ...any)
-	mu     gosync.Mutex
-	status model.SyncStatus
-	confl  map[string]model.Conflict
-	stop   chan struct{}
-	runMu  gosync.Mutex
+	st      *store.Store
+	drv     Drive
+	backend string // "api" (Drive API) or "folder" (a synced folder on disk)
+	folder  string // path of the synced folder when backend is "folder"
+	emit    func(string, any)
+	logf    func(string, ...any)
+	mu      gosync.Mutex
+	status  model.SyncStatus
+	confl   map[string]model.Conflict
+	stop    chan struct{}
+	runMu   gosync.Mutex
+}
+
+// SetDrive switches the storage backend. backend is "api" or "folder";
+// folder is the synced folder's path for the latter.
+func (e *Engine) SetDrive(d Drive, backend, folder string) {
+	e.runMu.Lock()
+	defer e.runMu.Unlock()
+	e.mu.Lock()
+	e.drv, e.backend, e.folder = d, backend, folder
+	e.mu.Unlock()
 }
 
 type remoteSession struct {
@@ -92,7 +104,7 @@ func New(st *store.Store, drv Drive, emit func(string, any), logf func(string, .
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	e := &Engine{st: st, drv: drv, emit: emit, logf: logf, confl: map[string]model.Conflict{}}
+	e := &Engine{st: st, drv: drv, backend: "api", emit: emit, logf: logf, confl: map[string]model.Conflict{}}
 	_ = st.ReadBlob(paths.AnchorDir(), "conflicts", &e.confl)
 	if e.confl == nil {
 		e.confl = map[string]model.Conflict{}
@@ -143,6 +155,8 @@ func (e *Engine) Status() model.SyncStatus {
 	st := e.status
 	st.DriveConnected = e.drv.Connected()
 	st.DriveEmail = e.drv.Email()
+	st.Backend = e.backend
+	st.FolderPath = e.folder
 	st.Pending = e.pendingLocked()
 	st.Conflicts = e.unresolvedLocked()
 	return st

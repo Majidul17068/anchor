@@ -5,6 +5,7 @@ import { Badge } from '../../components/Badge';
 import { formatBytes, formatRelativeDate } from '../../lib/format';
 import { PlanLock, useFeature } from '../../components/PlanGate';
 import { useSyncStore } from '../../store/sync';
+import { DriveHelp } from './DriveHelp';
 import { Cloud, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export interface DriveStatusProps {
@@ -43,7 +44,7 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-[var(--anchor-text)]">
-                Google Drive Database Storage
+                Google Drive
               </h3>
               <Badge variant={isConnected ? 'ok' : 'default'} size="xs">
                 {isConnected ? 'Active & Linked' : 'Disconnected'}
@@ -51,8 +52,10 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
             </div>
             <p className="text-xs text-[var(--anchor-text-muted)]">
               {isConnected
-                ? `Synchronizing sessions & skills directly with ${status?.driveEmail || 'your Google account'}`
-                : 'Connect Google Drive app-data folder to sync your sessions across all devices.'}
+                ? status?.backend === 'folder'
+                  ? `Sessions are saved to the Anchor folder in ${status.driveEmail ? `${status.driveEmail}'s Google Drive` : status.folderPath}; Google Drive for Desktop keeps it in sync.`
+                  : `Synchronizing sessions & skills directly with ${status?.driveEmail || 'your Google account'}`
+                : 'Connect your Google Drive: an Anchor folder is created in it and your sessions are saved there, filed by day.'}
             </p>
           </div>
         </div>
@@ -93,13 +96,7 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
         </div>
       </div>
 
-      {error && (
-        <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">
-          {error.startsWith('DRIVE_NOT_CONFIGURED')
-            ? 'This build has no Google OAuth client, so Drive sync cannot be enabled. Add the client id under Settings → Google Drive, or build Anchor with one (docs/DRIVE_SETUP.md).'
-            : error}
-        </p>
-      )}
+      {error && <DriveHelp error={error} />}
 
       {isConnected && status && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[var(--anchor-border-subtle)] text-xs">

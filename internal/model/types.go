@@ -276,6 +276,10 @@ type Notification struct {
 type SyncStatus struct {
 	DriveConnected bool   `json:"driveConnected"`
 	DriveEmail     string `json:"driveEmail,omitempty"`
+	// Backend is "folder" when sessions are written into a synced folder on
+	// this machine (Google Drive for Desktop etc.), "api" for the Drive API.
+	Backend    string `json:"backend,omitempty"`
+	FolderPath string `json:"folderPath,omitempty"`
 	LastSyncAt     string `json:"lastSyncAt,omitempty"`
 	Pending        int    `json:"pending"`
 	Conflicts      int    `json:"conflicts"`
