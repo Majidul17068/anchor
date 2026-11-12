@@ -641,7 +641,7 @@ func (a *API) SyncStatus() model.SyncStatus { return a.sync.Status() }
 
 func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
 	if !a.drive.Configured() {
-		return a.sync.Status(), errors.New("DRIVE_NOT_CONFIGURED: this build has no Google OAuth client id. Add driveClientId and driveClientSecret in Settings → Advanced, or see docs/DRIVE_SETUP.md.")
+		return a.sync.Status(), errors.New("DRIVE_NOT_CONFIGURED: this build has no Google OAuth client id. Add it under Settings → Google Drive OAuth client, or see docs/DRIVE_SETUP.md.")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()

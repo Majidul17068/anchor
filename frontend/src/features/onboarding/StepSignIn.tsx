@@ -13,13 +13,15 @@ export interface StepSignInProps {
 export const StepSignIn: React.FC<StepSignInProps> = ({ onComplete, isCompleted }) => {
   const account = useAuthStore((s) => s.account);
   const login = useAuthStore((s) => s.login);
+  const error = useAuthStore((s) => s.error);
   const [waitingBrowser, setWaitingBrowser] = useState(false);
 
   const handleLogin = async () => {
     setWaitingBrowser(true);
     await login();
     setWaitingBrowser(false);
-    onComplete();
+    // Only a sign-in that produced an account completes the step.
+    if (useAuthStore.getState().account) onComplete();
   };
 
   const getPlanBadge = (plan?: string) => {
@@ -83,7 +85,7 @@ export const StepSignIn: React.FC<StepSignInProps> = ({ onComplete, isCompleted 
           </span>
         </div>
       ) : (
-        <div>
+        <div className="space-y-2">
           <Button
             variant="primary"
             size="sm"
@@ -92,6 +94,11 @@ export const StepSignIn: React.FC<StepSignInProps> = ({ onComplete, isCompleted 
           >
             Sign in with Google Account
           </Button>
+          {error && (
+            <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">
+              {error}
+            </p>
+          )}
         </div>
       )}
     </div>

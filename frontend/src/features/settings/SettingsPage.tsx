@@ -6,6 +6,7 @@ import { AccountSection } from './AccountSection';
 import { AppearanceSection } from './AppearanceSection';
 import { ShortcutsSection } from './ShortcutsSection';
 import { DangerZone } from './DangerZone';
+import { DriveClientSection } from './DriveClientSection';
 import { Toast } from '../../components/Toast';
 
 export const SettingsPage: React.FC = () => {
@@ -31,6 +32,7 @@ export const SettingsPage: React.FC = () => {
 
       <CliSection />
       <AccountSection />
+      <DriveClientSection onShowToast={setToastMessage} />
       <AppearanceSection />
       <ShortcutsSection />
       <DangerZone onShowToast={setToastMessage} />

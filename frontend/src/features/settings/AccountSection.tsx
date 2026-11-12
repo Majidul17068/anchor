@@ -11,6 +11,7 @@ export const AccountSection: React.FC = () => {
   const account = useAuthStore((s) => s.account);
   const logout = useAuthStore((s) => s.logout);
   const login = useAuthStore((s) => s.login);
+  const error = useAuthStore((s) => s.error);
 
   return (
     <div className="p-5 bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-2xl text-left space-y-4 shadow-xs">
@@ -80,6 +81,11 @@ export const AccountSection: React.FC = () => {
             Sign In with Google
           </Button>
         </div>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">
+          {error}
+        </p>
       )}
     </div>
   );

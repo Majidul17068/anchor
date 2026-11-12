@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Majidul17068/anchor/internal/paths"
 )
@@ -39,6 +40,38 @@ func TestDecodeIDTokenRejectsGarbage(t *testing.T) {
 	// A well-formed token with no email is not a usable profile.
 	if _, err := decodeIDToken(fakeJWT(t, map[string]any{"name": "x"})); err == nil {
 		t.Fatal("token without email decoded")
+	}
+}
+
+func TestEmailFromCLILogsTakesTheNewestReport(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GEMINI_DIR", dir)
+	logs := filepath.Join(dir, "antigravity-cli", "log")
+	if err := os.MkdirAll(logs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if emailFromCLILogs() != "" {
+		t.Fatal("empty log dir should yield no email")
+	}
+	write := func(name, body string, age time.Duration) {
+		p := filepath.Join(logs, name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().Add(-age)
+		_ = os.Chtimes(p, at, at)
+	}
+	write("cli-20261111_100000.log", "I1111 ... applyAuthResult: email=old@example.com, authMethod=consumer\n", 3*time.Hour)
+	write("cli-20261112_150000.log", "W1112 ... You are not logged into Antigravity.\n", 2*time.Minute)
+	write("cli-20261112_154500.log", "x\nI1112 ... applyAuthResult: email=new@example.com, authMethod=consumer\n", time.Minute)
+	if got := emailFromCLILogs(); got != "new@example.com" {
+		t.Fatalf("got %q", got)
+	}
+	// A log older than the lookback is ignored even when it is the only one.
+	_ = os.Remove(filepath.Join(logs, "cli-20261112_154500.log"))
+	write("cli-20261111_100000.log", "applyAuthResult: email=stale@example.com, authMethod=consumer\n", 48*time.Hour)
+	if got := emailFromCLILogs(); got != "" {
+		t.Fatalf("stale log used: %q", got)
 	}
 }
 

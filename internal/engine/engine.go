@@ -50,6 +50,7 @@ type Engine struct {
 	tier        *acp.Tier
 	authMethods []acp.AuthMethod
 	probed      bool
+	probeErr    error // result of the last Probe; AUTH_REQUIRED means signed out
 }
 
 type proc struct {
@@ -311,7 +312,12 @@ func (e *Engine) Models() ([]model.Model, error) {
 }
 
 // Probe opens a throwaway session to learn models and the account tier.
-func (e *Engine) Probe() error {
+func (e *Engine) Probe() (err error) {
+	defer func() {
+		e.mu.Lock()
+		e.probeErr = err
+		e.mu.Unlock()
+	}()
 	p, err := e.Proc("")
 	if err != nil {
 		return err
@@ -373,49 +379,79 @@ func displayName(email string) string {
 	return strings.Join(words, " ")
 }
 
+// AuthStatus reports the signed-in Google account, or nil.
+//
+// Whether someone is signed in is the CLI's call: a session/new that comes
+// back with a tier means yes, AUTH_REQUIRED means no. The legacy credential
+// files are consulted only for the email and profile, because current CLI
+// builds keep the sign-in in the OS keyring and do not write them; trusting
+// them for the yes/no answer left a freshly signed-in user stuck on the
+// welcome screen.
 func (e *Engine) AuthStatus() *model.Account {
-	email := activeEmail()
-	if email == "" {
+	prev := e.st.Account()
+	if _, ok := e.loc.Find(); !ok {
+		return prev // no CLI to ask; show what we last knew
+	}
+	if prev == nil && e.Tier() == nil {
+		// Nothing recorded: ask the CLI once per process.
+		e.probeOnce()
+	}
+	if e.probeSaidSignedOut() {
+		_ = e.st.SaveAccount(nil)
 		return nil
 	}
-	a := e.st.Account()
-	if a == nil || a.Email != email {
-		a = &model.Account{Email: email, Name: displayName(email), Plan: model.PlanUnknown}
+	if prev == nil && e.Tier() == nil {
+		return nil // the probe did not run or failed for another reason
+	}
+	a := e.accountFromCLI(prev)
+	if prev == nil || *a != *prev {
 		_ = e.st.SaveAccount(a)
 	}
-	// The display name and picture come from the OpenID token Google issued
-	// at sign-in, not from the email's local part.
-	if p, err := readGoogleProfile(); err == nil && strings.EqualFold(p.Email, email) {
-		changed := false
-		if p.Name != "" && a.Name != p.Name {
-			a.Name, changed = p.Name, true
+	return a
+}
+
+// accountFromCLI assembles the account record for a sign-in the CLI has
+// confirmed. prev (may be nil) supplies fields no source can refresh.
+func (e *Engine) accountFromCLI(prev *model.Account) *model.Account {
+	a := &model.Account{Plan: model.PlanUnknown}
+	if prev != nil {
+		*a = *prev
+	}
+	email := activeEmail()
+	profile, _ := readGoogleProfile()
+	if email == "" && profile != nil {
+		email = profile.Email
+	}
+	if email == "" {
+		email = emailFromCLILogs()
+	}
+	if email != "" && !strings.EqualFold(email, a.Email) {
+		// A different account than last time: start the profile over.
+		a.Email, a.Name, a.AvatarURL, a.Plan = email, displayName(email), "", model.PlanUnknown
+	}
+	if profile != nil && strings.EqualFold(profile.Email, a.Email) {
+		if profile.Name != "" {
+			a.Name = profile.Name
 		}
-		if p.Picture != "" && a.AvatarURL != p.Picture {
-			a.AvatarURL, changed = p.Picture, true
-		}
-		if changed {
-			_ = e.st.SaveAccount(a)
+		if profile.Picture != "" {
+			a.AvatarURL = profile.Picture
 		}
 	}
-	if a.Plan == model.PlanUnknown {
-		// The subscription tier only comes with a session; probe once so the
-		// badge is right from the first screen.
-		if t := e.Tier(); t != nil {
-			a.Plan = planFromTier(t)
-		} else if _, ok := e.loc.Find(); ok && e.probeOnce() {
-			if t := e.Tier(); t != nil {
-				a.Plan = planFromTier(t)
-			}
+	if a.Name == "" {
+		if a.Email != "" {
+			a.Name = displayName(a.Email)
+		} else {
+			a.Name = "Google account"
 		}
-		_ = e.st.SaveAccount(a)
 	}
 	if t := e.Tier(); t != nil {
+		a.Plan = planFromTier(t)
 		a.PlanName, a.UpgradeURL = t.Name, t.UpgradeURI
 	}
 	return a
 }
 
-// probeOnce runs Probe at most once per process for plan detection.
+// probeOnce runs Probe at most once per process (until Login/Logout reset it).
 func (e *Engine) probeOnce() bool {
 	e.mu.Lock()
 	if e.probed {
@@ -425,6 +461,14 @@ func (e *Engine) probeOnce() bool {
 	e.probed = true
 	e.mu.Unlock()
 	return e.Probe() == nil
+}
+
+// probeSaidSignedOut is true when the last probe was refused for want of a
+// sign-in, which outranks any account record on disk.
+func (e *Engine) probeSaidSignedOut() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.probeErr != nil && strings.HasPrefix(e.probeErr.Error(), "AUTH_REQUIRED")
 }
 
 // Login runs the CLI's own Google OAuth flow (opens the browser) and then
@@ -440,15 +484,19 @@ func (e *Engine) Login() (*model.Account, error) {
 	if err := p.client.Call(ctx, "authenticate", map[string]any{"methodId": method}, nil); err != nil {
 		return nil, fmt.Errorf("Google sign-in failed: %w", translateErr(err))
 	}
-	// The CLI may have rewritten its credential files; restart processes so
-	// every session uses the new account.
+	// Restart the CLI processes so every session uses the new account, then
+	// confirm with a session of our own: that reply carries the tier and is
+	// the proof of sign-in. The legacy files may or may not appear.
 	e.Shutdown()
+	e.mu.Lock()
+	e.tier, e.probed, e.probeErr = nil, true, nil
+	e.mu.Unlock()
 	if err := e.Probe(); err != nil {
-		e.logf("probe after login: %v", err)
+		return nil, fmt.Errorf("Google sign-in succeeded but the CLI could not open a session: %w", err)
 	}
-	a := e.AuthStatus()
-	if a == nil {
-		return nil, errors.New("sign-in finished but no Google account is active; try again")
+	a := e.accountFromCLI(nil)
+	if err := e.st.SaveAccount(a); err != nil {
+		return nil, err
 	}
 	return a, nil
 }
@@ -477,6 +525,7 @@ func (e *Engine) Logout() error {
 	e.tier = nil
 	e.models = nil
 	e.probed = false
+	e.probeErr = nil
 	e.mu.Unlock()
 	if err2 := e.st.SaveAccount(nil); err == nil {
 		err = err2

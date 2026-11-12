@@ -12,11 +12,14 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
   const syncStatus = useSyncStore((s) => s.status);
   const connectDrive = useSyncStore((s) => s.connectDrive);
   const isSyncing = useSyncStore((s) => s.isSyncing);
+  const error = useSyncStore((s) => s.error);
 
   const handleConnect = async () => {
     await connectDrive();
-    onComplete();
+    if (useSyncStore.getState().status?.driveConnected) onComplete();
   };
+
+  const notConfigured = error?.startsWith('DRIVE_NOT_CONFIGURED');
 
   return (
     <div className="flex flex-col gap-3 text-left">
@@ -69,6 +72,14 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
           </div>
         )}
       </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">
+          {notConfigured
+            ? 'This build has no Google OAuth client, so Drive sync cannot be enabled yet. You can skip this step; add the client id later under Settings → Google Drive, or build Anchor with one (docs/DRIVE_SETUP.md).'
+            : error}
+        </p>
+      )}
     </div>
   );
 };

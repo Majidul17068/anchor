@@ -9,6 +9,8 @@ interface SyncState {
   thisDevice: Device | null;
   isSyncing: boolean;
   loading: boolean;
+  /** Why the last connect/sync failed, for the UI to show. */
+  error: string | null;
 
   loadSyncState: () => Promise<void>;
   syncNow: () => Promise<void>;
@@ -25,6 +27,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   thisDevice: null,
   isSyncing: false,
   loading: false,
+  error: null,
 
   loadSyncState: async () => {
     try {
@@ -54,24 +57,26 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
 
   syncNow: async () => {
-    set({ isSyncing: true });
+    set({ isSyncing: true, error: null });
     try {
       const bridge = getBridge();
       const updated = await bridge.sync.syncNow();
       set({ status: updated, isSyncing: false });
-    } catch {
-      set({ isSyncing: false });
+    } catch (e) {
+      set({ isSyncing: false, error: e instanceof Error ? e.message : String(e) });
     }
   },
 
   connectDrive: async () => {
-    set({ isSyncing: true });
+    set({ isSyncing: true, error: null });
     try {
       const bridge = getBridge();
       const st = await bridge.sync.connectDrive();
       set({ status: st, isSyncing: false });
-    } catch {
-      set({ isSyncing: false });
+    } catch (e) {
+      // A build without a Google OAuth client, or a cancelled consent
+      // screen, must say so rather than leave the button looking dead.
+      set({ isSyncing: false, error: e instanceof Error ? e.message : String(e) });
     }
   },
 

@@ -4,6 +4,7 @@ import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { formatBytes, formatRelativeDate } from '../../lib/format';
 import { PlanLock, useFeature } from '../../components/PlanGate';
+import { useSyncStore } from '../../store/sync';
 import { Cloud, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export interface DriveStatusProps {
@@ -23,6 +24,7 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
 }) => {
   const isConnected = Boolean(status?.driveConnected);
   const { gate: gateSync } = useFeature('drive_sync');
+  const error = useSyncStore((s) => s.error);
 
   return (
     <div className="p-5 bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-2xl text-left space-y-4 shadow-xs">
@@ -90,6 +92,14 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
           )}
         </div>
       </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">
+          {error.startsWith('DRIVE_NOT_CONFIGURED')
+            ? 'This build has no Google OAuth client, so Drive sync cannot be enabled. Add the client id under Settings → Google Drive, or build Anchor with one (docs/DRIVE_SETUP.md).'
+            : error}
+        </p>
+      )}
 
       {isConnected && status && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[var(--anchor-border-subtle)] text-xs">
