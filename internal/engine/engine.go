@@ -1145,7 +1145,7 @@ func (l *live) runTurn(streamID, text string, attachments []model.Attachment) {
 			f := false
 			l.steps[l.agentIdx].Streaming = &f
 			l.mu.Unlock()
-			l.emitChat(model.ChatEvent{Type: "step_update", ID: l.steps[l.agentIdx].ID, Patch: &model.Step{Streaming: &f}})
+			l.emitChat(model.ChatEvent{Type: "step_update", ID: l.steps[l.agentIdx].ID, Patch: model.StepPatch{"streaming": false}})
 			l.mu.Lock()
 		}
 		l.resetCursor()

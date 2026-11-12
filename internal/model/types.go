@@ -182,16 +182,22 @@ type EvalEvent struct {
 
 // ChatEvent mirrors the TS ChatEvent union.
 type ChatEvent struct {
-	Type      string `json:"type"` // step | step_update | token | done | error
-	Step      *Step  `json:"step,omitempty"`
-	ID        string `json:"id,omitempty"`
-	Patch     *Step  `json:"patch,omitempty"`
+	Type string `json:"type"` // step | step_update | token | done | error
+	Step *Step  `json:"step,omitempty"`
+	ID   string `json:"id,omitempty"`
+	// Patch holds only the fields a step_update changes. It was once a
+	// *Step, whose kind/id/at serialise even when unset; the UI spread that
+	// over the step and the agent reply vanished as its turn completed.
+	Patch     StepPatch `json:"patch,omitempty"`
 	StepID    string `json:"stepId,omitempty"`
 	Delta     string `json:"delta,omitempty"`
 	SessionID string `json:"sessionId,omitempty"`
 	Message   string `json:"message,omitempty"`
 	Code      string `json:"code,omitempty"` // rate_limited | offline | auth | cli
 }
+
+// StepPatch is a partial Step: JSON field name -> new value.
+type StepPatch map[string]any
 
 type MarketAuthor struct {
 	ID        string `json:"id"`

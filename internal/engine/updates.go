@@ -106,7 +106,7 @@ func (l *live) handleUpdate(u *acp.SessionUpdate) {
 			id, text := l.steps[l.thoughtIdx].ID, l.steps[l.thoughtIdx].Text
 			l.mu.Unlock()
 			if streaming {
-				l.emitChat(model.ChatEvent{Type: "step_update", ID: id, Patch: &model.Step{Text: text}})
+				l.emitChat(model.ChatEvent{Type: "step_update", ID: id, Patch: model.StepPatch{"text": text}})
 			}
 		} else {
 			st := model.Step{Kind: "thinking", ID: newID("step_th"), Text: delta, At: store.Now()}
@@ -166,29 +166,29 @@ func (l *live) handleUpdate(u *acp.SessionUpdate) {
 			}
 			l.mu.Lock()
 		}
-		patch := model.Step{}
+		patch := model.StepPatch{}
 		cur := &l.steps[idx]
 		if u.Status != "" {
 			cur.Status = toolStatus(u.Status)
-			patch.Status = cur.Status
+			patch["status"] = cur.Status
 			if cur.Status == "ok" || cur.Status == "error" {
 				if t, err := time.Parse(time.RFC3339, cur.At); err == nil {
 					cur.DurationMs = time.Since(t).Milliseconds()
-					patch.DurationMs = cur.DurationMs
+					patch["durationMs"] = cur.DurationMs
 				}
 			}
 		}
 		if out := toolOutput(u); out != "" {
 			cur.Output = out
-			patch.Output = out
+			patch["output"] = out
 		}
 		if (u.Title != "" || u.Name != "") && cur.Tool == "" {
 			cur.Tool = toolName(u)
-			patch.Tool = cur.Tool
+			patch["tool"] = cur.Tool
 		}
 		if len(u.RawInput) > 0 && cur.Args == nil {
 			cur.Args = rawArgs(u)
-			patch.Args = cur.Args
+			patch["args"] = cur.Args
 		}
 		id := cur.ID
 		l.mu.Unlock()
@@ -258,7 +258,7 @@ func (l *live) handlePermission(ctx context.Context, req *acp.RequestPermissionP
 	if decision == "cancelled" {
 		return acp.RequestPermissionResult{Outcome: acp.PermissionOutcome{Outcome: "cancelled"}}
 	}
-	l.emitChat(model.ChatEvent{Type: "step_update", ID: st.ID, Patch: &model.Step{Resolved: decision}})
+	l.emitChat(model.ChatEvent{Type: "step_update", ID: st.ID, Patch: model.StepPatch{"resolved": decision}})
 	want := map[string][]string{
 		"once":   {"allow_once", "allow_always"},
 		"always": {"allow_always", "allow_once"},

@@ -15,6 +15,7 @@ cd "$(dirname "$0")/.."
 
 VERSION="${1:-0.0.0-local}"
 export PATH="$PATH:$HOME/go/bin"
+export ANCHOR_VERSION="$VERSION"   # the UI's title-bar version comes from the frontend build
 
 wails build -clean -ldflags "-X main.Version=${VERSION}" || true   # self-signing may fail on provenance-tracked folders
 APP=$(ls -d build/bin/*.app | head -1)

@@ -7,15 +7,17 @@ import { VersionList } from './VersionList';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Tabs } from '../../components/Tabs';
-import { Check, Code, FileText, History, Sparkles, X } from 'lucide-react';
+import { Check, Code, FileText, Github, History, Sparkles, X } from 'lucide-react';
 
 export interface SkillEditorProps {
   skill: Skill;
   onSave: (skill: Omit<Skill, 'id' | 'source' | 'sharedWith' | 'updatedAt'> & { id?: string }) => Promise<Skill>;
   onClose: () => void;
+  /** Offered instead of writing from scratch: adapt a GitHub repository. */
+  onAdapt?: () => void;
 }
 
-export const SkillEditor: React.FC<SkillEditorProps> = ({ skill, onSave, onClose }) => {
+export const SkillEditor: React.FC<SkillEditorProps> = ({ skill, onSave, onClose, onAdapt }) => {
   const [activeTab, setActiveTab] = useState<'editor' | 'train' | 'versions'>('editor');
   const [name, setName] = useState(skill.name);
   const [description, setDescription] = useState(skill.description);
@@ -95,6 +97,17 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({ skill, onSave, onClose
           </div>
 
           <div className="flex items-center gap-2">
+            {onAdapt && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Github className="w-3.5 h-3.5" />}
+                onClick={onAdapt}
+                title="Install skills or a whole plugin from a public GitHub repository instead of writing one"
+              >
+                Adapt from GitHub
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>

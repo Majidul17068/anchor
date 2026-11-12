@@ -53,8 +53,10 @@
   user-select: text !important;
 }
 
-/* Focus styles */
-:focus-visible {
+/* Focus styles: keyboard focus ring for controls. Text fields draw their
+   own focus border, so they are excluded; with both, the composer showed a
+   thick double outline the moment it was clicked. */
+:focus-visible:not(input):not(textarea):not(select) {
   outline: 2px solid var(--anchor-accent);
   outline-offset: 1px;
 }

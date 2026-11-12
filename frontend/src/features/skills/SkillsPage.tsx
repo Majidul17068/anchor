@@ -134,6 +134,10 @@ triggers: [domain, custom]
           skill={editorSkill}
           onSave={saveSkill}
           onClose={() => setEditorSkill(null)}
+          onAdapt={() => {
+            setEditorSkill(null);
+            setImportDialogOpen(true);
+          }}
         />
       )}
 
