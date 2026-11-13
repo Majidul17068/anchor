@@ -18,6 +18,11 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
+<p align="center">
+  <img src="docs/media/anchor-teaser.gif" alt="Anchor in motion: skill evaluation, sessions, and parent-source sync" width="680"><br>
+  <sub><a href="docs/media/anchor-teaser.mp4">Watch the full-resolution teaser (MP4)</a></sub>
+</p>
+
 ---
 
 **Anchor** wraps Google's Antigravity CLI (`agy`) in a native desktop app, the
