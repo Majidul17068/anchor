@@ -21,6 +21,7 @@ import (
 	"github.com/Majidul17068/anchor/internal/cli"
 	"github.com/Majidul17068/anchor/internal/drive"
 	"github.com/Majidul17068/anchor/internal/engine"
+	"github.com/Majidul17068/anchor/internal/folderdrive"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/skills"
 	"github.com/Majidul17068/anchor/internal/store"
@@ -167,14 +168,42 @@ func main() {
 			fmt.Printf("%-40s %-8s %s\n", a.ID, a.Source, trunc(a.Description, 70))
 		}
 	case "sync":
-		drv := drive.New(st, func(u string) { fmt.Println("open:", u) }, logf)
+		var drv anchorsync.Drive = drive.New(st, func(u string) { fmt.Println("open:", u) }, logf)
+		backend := "api"
+		if root := st.SettingString("syncFolder"); root != "" {
+			fd := folderdrive.New(root)
+			drv, backend = fd, "folder"
+			fmt.Printf("folder: %s (%s)\n", root, fd.Health().Code)
+		}
 		se := anchorsync.New(st, drv, emit, logf)
+		se.SetDrive(drv, backend, st.SettingString("syncFolder"), folderdrive.KindOf(st.SettingString("syncFolder")))
 		status, err := se.SyncNow(context.Background())
 		if err != nil {
 			fmt.Println("error:", err)
 		}
 		b, _ := json.MarshalIndent(status, "", "  ")
 		fmt.Println(string(b))
+	case "drive":
+		// Diagnose Google Drive for Desktop on this machine without the UI.
+		fmt.Printf("Drive for Desktop app installed: %v (%s)\n", folderdrive.AppInstalled(), folderdrive.AppPath())
+		fmt.Printf("Drive for Desktop client running: %v\n", folderdrive.ClientRunning())
+		cands := folderdrive.Candidates()
+		if len(cands) == 0 {
+			fmt.Println("No synced folders found.")
+		}
+		for _, c := range cands {
+			h := folderdrive.Check(c.Path)
+			fmt.Printf("%-13s reachable=%-5v %s\n", c.Label, c.Reachable, c.Path)
+			if h.Code != "ok" {
+				fmt.Printf("              %s: %s\n", h.Code, h.Message)
+			}
+		}
+		if root := st.SettingString("syncFolder"); root != "" {
+			h := folderdrive.Check(root)
+			fmt.Printf("Chosen folder: %s -> %s %s\n", root, h.Code, h.Message)
+		} else {
+			fmt.Println("Chosen folder: none (Sync → Connect Google Drive)")
+		}
 	case "version":
 		fmt.Println("anchorctl", Version)
 	default:
@@ -192,5 +221,5 @@ func trunc(s string, n int) string {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: anchorctl doctor | sessions | chat <id|new> <text> | skills | agents | sync | version")
+	fmt.Fprintln(os.Stderr, "usage: anchorctl doctor | sessions | chat <id|new> <text> | skills | agents | sync | drive | version")
 }

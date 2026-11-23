@@ -137,14 +137,25 @@ func Candidates() []Candidate {
 		}
 		out = append(out, Candidate{Path: path, Kind: kind, Label: Label(kind), Reachable: Reachable(path)})
 	}
+	// addMount lists a cloud mount we know exists (its directory entry was
+	// just read) even when the mount does not answer: an unreachable Google
+	// Drive folder is exactly the case the UI must explain.
+	addMount := func(path, kind string) {
+		out = append(out, Candidate{Path: path, Kind: kind, Label: Label(kind), Reachable: Reachable(path)})
+	}
 	switch runtime.GOOS {
 	case "darwin":
-		entries, _ := os.ReadDir(filepath.Join(home, "Library", "CloudStorage"))
+		var entries []os.DirEntry
+		_ = bounded(probeTimeout, func() error {
+			var err error
+			entries, err = os.ReadDir(filepath.Join(home, "Library", "CloudStorage"))
+			return err
+		})
 		for _, e := range entries {
 			name := e.Name()
 			switch {
 			case strings.HasPrefix(name, "GoogleDrive-"):
-				add(filepath.Join(home, "Library", "CloudStorage", name, "My Drive"), "google-drive")
+				addMount(filepath.Join(home, "Library", "CloudStorage", name, "My Drive"), "google-drive")
 			case strings.HasPrefix(name, "OneDrive"):
 				add(filepath.Join(home, "Library", "CloudStorage", name), "onedrive")
 			case strings.HasPrefix(name, "Dropbox"):

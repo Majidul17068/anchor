@@ -179,7 +179,10 @@ func Check(path string) Health {
 		return Health{Code: "ok"}
 	}
 	isGoogle := KindOf(path) == "google-drive"
-	if !Exists(path) {
+	// A Drive mount whose client is down often fails even Lstat on "My
+	// Drive" while the mount directory above it is still there.
+	exists := Exists(path) || (isGoogle && Exists(filepath.Dir(path)))
+	if !exists {
 		return Health{Code: "DRIVE_NOT_FOUND", Message: fmt.Sprintf("The folder %s no longer exists.", path)}
 	}
 	if isGoogle {

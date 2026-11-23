@@ -215,6 +215,12 @@ export interface SyncStatus {
   backend?: 'folder' | 'api';
   folderPath?: string;
   folderKind?: 'google-drive' | 'icloud' | 'dropbox' | 'onedrive' | 'folder';
+  /**
+   * "ok", or why the chosen folder cannot be used right now:
+   * DRIVE_CLIENT_NOT_RUNNING, DRIVE_CLIENT_MISSING, DRIVE_UNREACHABLE, DRIVE_NOT_FOUND.
+   */
+  health?: string;
+  healthMessage?: string;
   lastSyncAt?: string;
   pending: number;
   conflicts: number;
@@ -226,6 +232,8 @@ export interface SyncFolderCandidate {
   path: string;
   kind: 'google-drive' | 'icloud' | 'dropbox' | 'onedrive' | 'folder';
   label: string;
+  /** False when the folder exists but its cloud client is not running. */
+  reachable?: boolean;
 }
 
 /** A session another device published to Drive that this one has not pulled. */

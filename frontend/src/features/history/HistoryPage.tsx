@@ -4,6 +4,7 @@ import { getBridge } from '../../bridge';
 import { useSessionStore } from '../../store/session';
 import { useSyncStore } from '../../store/sync';
 import { confirmDialog } from '../../store/confirm';
+import { deleteSessionMessage } from '../../lib/sync';
 import { HistoryFilters } from './HistoryFilters';
 import { HistoryRow } from './HistoryRow';
 import { EmptyState } from '../../components/EmptyState';
@@ -91,7 +92,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onOpenSession }) => {
   const handleDelete = async (s: Session) => {
     const ok = await confirmDialog({
       title: `Delete session "${s.title}"?`,
-      message: 'Removed from Anchor on this device. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.',
+      message: deleteSessionMessage(s, thisDevice?.id),
       confirmLabel: 'Delete',
       danger: true,
     });

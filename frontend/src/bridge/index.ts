@@ -165,6 +165,8 @@ export interface AnchorBridge {
     folderCandidates(): Promise<SyncFolderCandidate[]>;
     /** Use one of them (or any folder path). */
     useFolder(path: string): Promise<SyncStatus>;
+    /** Launch Google Drive for Desktop when its folder is not responding (desktop shell only). */
+    openDriveClient?(): Promise<void>;
     disconnectDrive(): Promise<void>;
     syncNow(): Promise<SyncStatus>;
     conflicts(): Promise<Conflict[]>;

@@ -26,6 +26,8 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
   const isConnected = Boolean(status?.driveConnected);
   const { gate: gateSync } = useFeature('drive_sync');
   const error = useSyncStore((s) => s.error);
+  // A folder was chosen earlier but Drive for Desktop is not serving it now.
+  const unhealthy = status?.folderPath && status.health && status.health !== 'ok' ? `${status.health}: ${status.healthMessage ?? ''}` : null;
 
   return (
     <div className="p-5 bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-2xl text-left space-y-4 shadow-xs">
@@ -98,7 +100,7 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
         </div>
       </div>
 
-      {error && <DriveHelp error={error} />}
+      {error ? <DriveHelp error={error} onRetry={onConnect} /> : unhealthy ? <DriveHelp error={unhealthy} onRetry={onConnect} /> : null}
 
       {isConnected && status && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[var(--anchor-border-subtle)] text-xs">

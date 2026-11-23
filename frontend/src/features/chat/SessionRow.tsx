@@ -2,6 +2,7 @@ import React from 'react';
 import type { Session } from '../../bridge/types';
 import { useSessionStore } from '../../store/session';
 import { confirmDialog } from '../../store/confirm';
+import { deleteSessionMessage } from '../../lib/sync';
 import { formatRelativeDate } from '../../lib/format';
 import { Badge } from '../../components/Badge';
 import {
@@ -41,7 +42,7 @@ export const SessionRow: React.FC<SessionRowProps> = ({
     e.stopPropagation();
     const ok = await confirmDialog({
       title: `Delete session "${session.title}"?`,
-      message: 'Removed from Anchor on this device. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.',
+      message: deleteSessionMessage(session, thisDeviceId),
       confirmLabel: 'Delete',
       danger: true,
     });
