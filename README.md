@@ -58,8 +58,14 @@ machines and in your own Google Drive.
   Drive. Switch Sync on for a session and it is saved there under
   `Anchor/YYYY/MM/DD/` (the day it was created). On any other device, sign
   in to the same Google account, pull the session you want, and continue
-  where you left off; the device that created it (its *parent source*)
-  merges what you add and is the only one that can publish or unpublish it.
+  where you left off. The device that created a session is its *parent
+  source*: it is the only one that can publish, unpublish or delete the
+  session from Drive, and it merges what other devices add. Every device
+  keeps Drive current with its own additions, and pulls show the latest
+  conversation even before the parent has merged. Drive is reached through
+  Google Drive for Desktop, which must be installed and running; the Sync
+  page says exactly what is missing, and `anchorctl drive` checks it from
+  the terminal.
 
 ## Download
 

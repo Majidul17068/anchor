@@ -22,6 +22,31 @@ chosen folder is remembered in `~/.anchor/settings.json` (`syncFolder`).
 Drive for Desktop is not available on Linux; use another synced folder, or
 the API route below.
 
+### When Connect says Drive is unavailable
+
+A Drive for Desktop folder is a network mount: when the Drive client is not
+running, the folder still exists but every read hangs. Anchor never waits on
+it; instead the Sync page shows one of these and what to do:
+
+| Code | Meaning | Fix |
+|---|---|---|
+| `DRIVE_CLIENT_NOT_RUNNING` | Drive for Desktop is installed but not running | Click *Open Google Drive*, wait for it to sign in, then *Try again* |
+| `DRIVE_CLIENT_MISSING` | The Drive folder is left over from an earlier install; the app was removed | Reinstall Drive for Desktop and sign in, then *Connect again* |
+| `DRIVE_UNREACHABLE` | The chosen folder exists but does not answer | Check that its cloud client is running and signed in |
+| `DRIVE_NOT_FOUND` | No synced folder on this machine | Install Drive for Desktop or *Choose a synced folder…* |
+
+From the terminal, `anchorctl drive` prints the same diagnosis: whether the
+Drive app is installed and running, every synced folder found, and whether
+each one answers.
+
+### Who may delete what
+
+The device that created a session (its parent source) is the only one that
+publishes, unpublishes or deletes it on Drive: deleting there removes the
+canonical file and any additions other devices uploaded. Deleting a pulled
+copy on another device removes only that copy; the session stays on Drive
+and can be pulled again.
+
 ## Alternative: the Drive API (needs a one-time OAuth client)
 
 Without a synced folder Anchor can talk to the Drive API directly, but

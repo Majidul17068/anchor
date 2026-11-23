@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0 — Drive that tells the truth, delete that follows the parent rule
+
+- Google Drive for Desktop folder handling never hangs: every folder
+  operation runs under a deadline, and a folder whose Drive client is down
+  shows as disconnected with the exact reason (Drive app uninstalled, Drive
+  app not running with an *Open Google Drive* button, folder unreachable).
+- Deleting a session on the device that created it (the parent source) also
+  removes it from Google Drive, appends from other devices included. Other
+  devices only drop their own copy and can pull the session again later.
+- Pulling or refreshing a session includes additions other devices uploaded
+  that the parent has not merged yet, so every device sees the latest
+  conversation even while the parent is offline.
+- Delete confirmations explain what will happen on this device and on Drive.
+- `anchorctl drive` diagnoses Drive for Desktop from the terminal.
+- The app bundle now carries the real version number.
+
+## 0.2.x — November 12
+
+- Sign-in, chat and delete fixes; visible `Anchor/YYYY/MM/DD` folder on
+  Drive with pull-on-demand; Drive for Desktop folder as the default Drive
+  route; Adapt Skill from GitHub; plan gating; agent test panel.
+
 ## 0.1.0 — first release
 
 - Desktop shell for macOS, Windows and Linux (Wails v2, Go backend).
