@@ -189,11 +189,11 @@ type ChatEvent struct {
 	// *Step, whose kind/id/at serialise even when unset; the UI spread that
 	// over the step and the agent reply vanished as its turn completed.
 	Patch     StepPatch `json:"patch,omitempty"`
-	StepID    string `json:"stepId,omitempty"`
-	Delta     string `json:"delta,omitempty"`
-	SessionID string `json:"sessionId,omitempty"`
-	Message   string `json:"message,omitempty"`
-	Code      string `json:"code,omitempty"` // rate_limited | offline | auth | cli
+	StepID    string    `json:"stepId,omitempty"`
+	Delta     string    `json:"delta,omitempty"`
+	SessionID string    `json:"sessionId,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	Code      string    `json:"code,omitempty"` // rate_limited | offline | auth | cli
 }
 
 // StepPatch is a partial Step: JSON field name -> new value.
@@ -281,10 +281,14 @@ type SyncStatus struct {
 	Backend    string `json:"backend,omitempty"`
 	FolderPath string `json:"folderPath,omitempty"`
 	FolderKind string `json:"folderKind,omitempty"` // google-drive | icloud | dropbox | onedrive | folder
-	LastSyncAt     string `json:"lastSyncAt,omitempty"`
-	Pending        int    `json:"pending"`
-	Conflicts      int    `json:"conflicts"`
-	UsageBytes     int64  `json:"usageBytes"`
+	// Health is "ok" or a DRIVE_* code explaining why the chosen folder
+	// cannot be used right now (client not running, uninstalled, …).
+	Health        string `json:"health,omitempty"`
+	HealthMessage string `json:"healthMessage,omitempty"`
+	LastSyncAt    string `json:"lastSyncAt,omitempty"`
+	Pending       int    `json:"pending"`
+	Conflicts     int    `json:"conflicts"`
+	UsageBytes    int64  `json:"usageBytes"`
 }
 
 // RemoteSession is a session another device published to Drive that this

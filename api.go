@@ -290,7 +290,25 @@ func (a *API) SessionsSetSync(id string, enabled bool) (model.Session, error) {
 	return s, err
 }
 
-func (a *API) SessionsDelete(id string) error { return a.eng.Delete(id) }
+// SessionsDelete removes a session from this device. When this device is
+// the session's parent source and the session was published, the copy on
+// Google Drive (and any appends other devices uploaded) is removed too:
+// only the parent may delete the chat from its original location. A replica
+// deleting its local copy leaves Drive untouched.
+func (a *API) SessionsDelete(id string) error {
+	if meta, err := a.st.GetSession(id); err == nil {
+		isParent := meta.OriginDeviceID == a.st.Device().ID
+		if isParent && (meta.SyncEnabled || meta.DriveFileID != "") {
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			if err := a.sync.Unpublish(ctx, id); err != nil {
+				a.log.Printf("delete %s: could not remove from Drive: %v", id, err)
+				return fmt.Errorf("the session was not deleted: its copy on Google Drive could not be removed (%v). Reconnect Drive and try again, or switch Sync off first", err)
+			}
+		}
+	}
+	return a.eng.Delete(id)
+}
 
 func (a *API) SessionsExportMarkdown(id string) (string, error) { return a.eng.ExportMarkdown(id) }
 
@@ -318,8 +336,8 @@ func (a *API) HistorySearch(q string, f engine.SearchFilters) ([]model.Session, 
 // agents
 // ---------------------------------------------------------------------------
 
-func (a *API) AgentsList() ([]model.Agent, error)          { return a.agents.List() }
-func (a *API) AgentsGet(id string) (*model.Agent, error)   { return a.agents.Get(id) }
+func (a *API) AgentsList() ([]model.Agent, error)        { return a.agents.List() }
+func (a *API) AgentsGet(id string) (*model.Agent, error) { return a.agents.Get(id) }
 func (a *API) AgentsSave(in agents.SaveInput) (*model.Agent, error) {
 	ag, err := a.agents.Save(in)
 	if err == nil {
@@ -398,7 +416,7 @@ func (a *API) SkillsGet(id string) (*model.Skill, error) {
 }
 
 func (a *API) SkillsSave(in skills.SaveInput) (*model.Skill, error) { return a.skills.Save(in) }
-func (a *API) SkillsDelete(id string) error                        { return a.skills.Delete(id) }
+func (a *API) SkillsDelete(id string) error                         { return a.skills.Delete(id) }
 
 // SkillsEvaluate streams results on "skills:eval:<id>" and returns when done.
 func (a *API) SkillsEvaluate(id string) error {
@@ -655,7 +673,25 @@ func (a *API) MarketMarkRead(ids []string) error { return a.market.MarkRead(ids)
 // sync
 // ---------------------------------------------------------------------------
 
-func (a *API) SyncStatus() model.SyncStatus { return a.sync.Status() }
+// SyncStatus adds folder health to the engine's view: a chosen Drive folder
+// whose client is down shows as disconnected with the reason attached.
+func (a *API) SyncStatus() model.SyncStatus {
+	st := a.sync.Status()
+	if root := a.folder.Root(); root != "" {
+		h := a.folder.Health()
+		st.Backend, st.FolderPath, st.FolderKind = "folder", root, folderdrive.KindOf(root)
+		st.Health, st.HealthMessage = h.Code, h.Message
+		st.DriveConnected = h.Code == "ok"
+		if st.DriveEmail == "" {
+			st.DriveEmail = a.folder.Email()
+		}
+	}
+	return st
+}
+
+// SyncOpenDriveClient launches Google Drive for Desktop so its folder
+// starts answering again.
+func (a *API) SyncOpenDriveClient() error { return folderdrive.OpenClient() }
 
 // SyncConnectDrive connects Google Drive the simplest way available:
 //
@@ -670,6 +706,11 @@ func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
 	// Only Google Drive is taken without asking: the button says Google
 	// Drive. Other clouds found on the machine are offered, not assumed.
 	if gd, ok := folderdrive.GoogleDrive(cands); ok {
+		if !gd.Reachable {
+			// The folder is there but Drive for Desktop is not serving it.
+			// Say exactly that instead of hanging on the first write.
+			return a.SyncStatus(), folderdrive.Check(gd.Path).Error()
+		}
 		return a.useFolder(gd.Path)
 	}
 	if a.drive.Configured() {
@@ -729,6 +770,9 @@ func (a *API) SyncFolderCandidates() []folderdrive.Candidate {
 }
 
 func (a *API) useFolder(path string) (model.SyncStatus, error) {
+	if h := folderdrive.Check(path); h.Code != "ok" {
+		return a.SyncStatus(), h.Error()
+	}
 	a.folder.SetRoot(path)
 	if err := a.folder.Ensure(); err != nil {
 		a.folder.SetRoot("")

@@ -77,14 +77,23 @@ func (s *Service) SetRoot(root string) {
 	s.props = map[string]cachedProps{}
 }
 
-// Connected reports whether the folder exists and can be written to.
+// Connected reports whether the folder exists and answers. A chosen folder
+// whose cloud client is down counts as disconnected, so nothing blocks on it.
 func (s *Service) Connected() bool {
 	root := s.Root()
 	if root == "" {
 		return false
 	}
-	st, err := os.Stat(root)
-	return err == nil && st.IsDir()
+	return Reachable(root)
+}
+
+// Health reports why the chosen folder is or is not usable right now.
+func (s *Service) Health() Health {
+	root := s.Root()
+	if root == "" {
+		return Health{Code: "DRIVE_NOT_FOUND", Message: "No synced folder is chosen."}
+	}
+	return Check(root)
 }
 
 var emailInPath = regexp.MustCompile(`GoogleDrive-([^/\\]+@[^/\\]+)`)
@@ -120,9 +129,13 @@ func Candidates() []Candidate {
 	home := paths.Home()
 	var out []Candidate
 	add := func(path, kind string) {
-		if st, err := os.Stat(path); err == nil && st.IsDir() {
-			out = append(out, Candidate{Path: path, Kind: kind, Label: Label(kind)})
+		// Exists is bounded: a dead Drive mount must not stall detection. A
+		// folder that exists but does not answer is still listed, marked
+		// unreachable, so the UI can say "Drive is installed but not running".
+		if !Exists(path) {
+			return
 		}
+		out = append(out, Candidate{Path: path, Kind: kind, Label: Label(kind), Reachable: Reachable(path)})
 	}
 	switch runtime.GOOS {
 	case "darwin":
@@ -167,6 +180,9 @@ type Candidate struct {
 	Path  string `json:"path"`
 	Kind  string `json:"kind"` // google-drive | onedrive | dropbox | icloud | folder
 	Label string `json:"label"`
+	// Reachable is false when the folder exists but its cloud client is not
+	// running, so reads would hang.
+	Reachable bool `json:"reachable"`
 }
 
 // KindOf guesses which cloud client keeps a folder in sync, from its path.
@@ -224,96 +240,109 @@ func (s *Service) rel(path string) string {
 	return filepath.ToSlash(r)
 }
 
-func (s *Service) DayFolder(_ context.Context, t time.Time) (string, error) {
+func (s *Service) DayFolder(ctx context.Context, t time.Time) (string, error) {
 	if s.Root() == "" {
 		return "", errors.New("no synced folder chosen")
 	}
 	day := drive.DayPath(t)
-	if err := os.MkdirAll(s.abs(day), 0o755); err != nil {
+	err := boundedCtx(ctx, opTimeout, func() error { return os.MkdirAll(s.abs(day), 0o755) })
+	if err != nil {
 		return "", err
 	}
 	return day, nil
 }
 
-func (s *Service) ListApp(_ context.Context, prefix string) ([]drive.File, error) {
+func (s *Service) ListApp(ctx context.Context, prefix string) ([]drive.File, error) {
 	dir := filepath.Join(s.AnchorDir(), hiddenDir, devicesDir)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
 	var out []drive.File
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
-			continue
+	err := boundedCtx(ctx, opTimeout, func() error {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
 		}
-		f, err := s.fileInfo(filepath.Join(dir, e.Name()))
-		if err == nil {
-			out = append(out, f)
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+				continue
+			}
+			f, err := s.fileInfo(filepath.Join(dir, e.Name()))
+			if err == nil {
+				out = append(out, f)
+			}
 		}
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }
 
 func (s *Service) PutApp(ctx context.Context, name string, props map[string]string, content []byte) (drive.File, error) {
 	return s.PutIn(ctx, hiddenDir+"/"+devicesDir, name, props, content)
 }
 
-func (s *Service) PutIn(_ context.Context, parentID, name string, props map[string]string, content []byte) (drive.File, error) {
+func (s *Service) PutIn(ctx context.Context, parentID, name string, props map[string]string, content []byte) (drive.File, error) {
 	if s.Root() == "" {
 		return drive.File{}, errors.New("no synced folder chosen")
 	}
 	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.HasPrefix(parentID, "..") {
 		return drive.File{}, fmt.Errorf("invalid file name %q", name)
 	}
-	dir := s.abs(parentID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return drive.File{}, err
-	}
 	body, err := embedProps(content, props)
 	if err != nil {
 		return drive.File{}, err
 	}
-	path := filepath.Join(dir, name)
-	// Write whole, then rename: the sync client must never upload a torn file.
-	tmp := path + ".anchor-tmp"
-	if err := os.WriteFile(tmp, body, 0o644); err != nil {
-		return drive.File{}, err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return drive.File{}, err
-	}
-	return s.fileInfo(path)
+	var out drive.File
+	err = boundedCtx(ctx, opTimeout, func() error {
+		dir := s.abs(parentID)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		path := filepath.Join(dir, name)
+		// Write whole, then rename: the sync client must never upload a torn file.
+		tmp := path + ".anchor-tmp"
+		if err := os.WriteFile(tmp, body, 0o644); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			_ = os.Remove(tmp)
+			return err
+		}
+		f, err := s.fileInfo(path)
+		out = f
+		return err
+	})
+	return out, err
 }
 
-func (s *Service) ListKind(_ context.Context, kind string) ([]drive.File, error) {
+func (s *Service) ListKind(ctx context.Context, kind string) ([]drive.File, error) {
 	root := s.AnchorDir()
 	if s.Root() == "" {
 		return nil, nil
 	}
 	var out []drive.File
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if p != root && strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
+	// A whole-tree walk gets more time than a single file operation.
+	err := boundedCtx(ctx, 4*opTimeout, func() error {
+		return filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
 			}
+			if d.IsDir() {
+				if p != root && strings.HasPrefix(d.Name(), ".") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(d.Name(), ".json") || strings.HasSuffix(d.Name(), ".anchor-tmp") {
+				return nil
+			}
+			f, err := s.fileInfo(p)
+			if err != nil || f.Props[drive.PropKind] != kind {
+				return nil
+			}
+			out = append(out, f)
 			return nil
-		}
-		if !strings.HasSuffix(d.Name(), ".json") || strings.HasSuffix(d.Name(), ".anchor-tmp") {
-			return nil
-		}
-		f, err := s.fileInfo(p)
-		if err != nil || f.Props[drive.PropKind] != kind {
-			return nil
-		}
-		out = append(out, f)
-		return nil
+		})
 	})
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
@@ -322,8 +351,13 @@ func (s *Service) ListKind(_ context.Context, kind string) ([]drive.File, error)
 	return out, nil
 }
 
-func (s *Service) Get(_ context.Context, id string) ([]byte, error) {
-	b, err := os.ReadFile(s.abs(id))
+func (s *Service) Get(ctx context.Context, id string) ([]byte, error) {
+	var b []byte
+	err := boundedCtx(ctx, opTimeout, func() error {
+		var err error
+		b, err = os.ReadFile(s.abs(id))
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -331,9 +365,9 @@ func (s *Service) Get(_ context.Context, id string) ([]byte, error) {
 	return payload, err
 }
 
-func (s *Service) Delete(_ context.Context, id string) error {
+func (s *Service) Delete(ctx context.Context, id string) error {
 	path := s.abs(id) // resolves the root under the lock; must not nest
-	err := os.Remove(path)
+	err := boundedCtx(ctx, opTimeout, func() error { return os.Remove(path) })
 	s.mu.Lock()
 	delete(s.props, path)
 	s.mu.Unlock()
