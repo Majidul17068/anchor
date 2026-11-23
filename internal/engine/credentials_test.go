@@ -46,6 +46,7 @@ func TestDecodeIDTokenRejectsGarbage(t *testing.T) {
 func TestEmailFromCLILogsTakesTheNewestReport(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("GEMINI_DIR", dir)
+	t.Setenv("ANCHOR_HOME", t.TempDir()) // Anchor's own acp.log is scanned too; keep the real one out
 	logs := filepath.Join(dir, "antigravity-cli", "log")
 	if err := os.MkdirAll(logs, 0o755); err != nil {
 		t.Fatal(err)
@@ -53,6 +54,18 @@ func TestEmailFromCLILogsTakesTheNewestReport(t *testing.T) {
 	if emailFromCLILogs() != "" {
 		t.Fatal("empty log dir should yield no email")
 	}
+	// The log Anchor asks the CLI to write (--log-file) counts as well.
+	anchorLogs := filepath.Join(os.Getenv("ANCHOR_HOME"), "logs")
+	if err := os.MkdirAll(anchorLogs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(anchorLogs, "acp.log"), []byte("I1123 server_oauth.go:221] applyAuthResult: email=from-anchor@example.com, authMethod=consumer\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := emailFromCLILogs(); got != "from-anchor@example.com" {
+		t.Fatalf("acp.log not consulted, got %q", got)
+	}
+	_ = os.Remove(filepath.Join(anchorLogs, "acp.log"))
 	write := func(name, body string, age time.Duration) {
 		p := filepath.Join(logs, name)
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {

@@ -31,20 +31,23 @@ var applyAuthRe = regexp.MustCompile(`applyAuthResult: email=([^,\s]+)`)
 const cliLogLookback = 24 * time.Hour
 
 // emailFromCLILogs returns the account the newest recent CLI log reports.
+// Anchor starts the CLI with its own --log-file (acp.log in Anchor's log
+// folder), so that file is where the line lands for the processes Anchor
+// runs; the CLI's own log folder covers terminal sessions.
 func emailFromCLILogs() string {
-	dir := filepath.Join(paths.CLIDataDir(), "log")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
 	type logFile struct {
 		path string
 		mod  time.Time
 	}
 	var logs []logFile
 	cutoff := time.Now().Add(-cliLogLookback)
+	if info, err := os.Stat(filepath.Join(paths.LogDir(), "acp.log")); err == nil && info.ModTime().After(cutoff) {
+		logs = append(logs, logFile{filepath.Join(paths.LogDir(), "acp.log"), info.ModTime()})
+	}
+	dir := filepath.Join(paths.CLIDataDir(), "log")
+	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), "cli-") || !strings.HasSuffix(e.Name(), ".log") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") || !(strings.HasPrefix(e.Name(), "cli-") || strings.HasPrefix(e.Name(), "acp-")) {
 			continue
 		}
 		info, err := e.Info()
