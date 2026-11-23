@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — Drive for everyone, account name back
+
+- Releases carry Anchor's Google OAuth client; the consent screen is in
+  production, so any Google account can connect Google Drive with one click
+  and nothing to install.
+- Connect prefers the Drive API over a Drive for Desktop folder whose client
+  is not running.
+- The signed-in Google account is shown again with Antigravity CLI 1.5.15,
+  which keeps its session in the OS keychain.
+- Privacy policy added (docs/PRIVACY.md).
+
 ## 0.3.0 — Drive that tells the truth, delete that follows the parent rule
 
 - Google Drive for Desktop folder handling never hangs: every folder
