@@ -1,8 +1,18 @@
 # Google Drive sync
 
 Anchor backs sessions up to each user's **own** Google Drive, in a visible
-`Anchor/` folder filed by day. No Anchor server is involved. There are two
-ways to reach Drive; the first needs no setup from anyone.
+`Anchor/` folder filed by day. No Anchor server is involved.
+
+**Status (23 Nov 2026):** official releases carry Anchor's Google OAuth
+client (Cloud project `anchor-desktop`, consent screen *In production*,
+non-sensitive scopes only, so Google requires no verification). Any Google
+account can connect from the release build: *Sync → Connect Google Drive*
+opens Google's consent page, the user allows once, done. Nothing needs to be
+installed. The sections below describe how that client was made (for
+maintainers) and the Drive for Desktop folder route, which still works and
+is preferred automatically when the Drive app is running on the machine.
+
+There are two ways to reach Drive; the first needs no setup from anyone.
 
 ## Default: Google Drive for Desktop (no registration)
 
