@@ -7,8 +7,9 @@
   shows as disconnected with the exact reason (Drive app uninstalled, Drive
   app not running with an *Open Google Drive* button, folder unreachable).
 - Deleting a session on the device that created it (the parent source) also
-  removes it from Google Drive, appends from other devices included. Other
-  devices only drop their own copy and can pull the session again later.
+  removes it from Google Drive, appends from other devices included, and a
+  tombstone makes every other device drop its copy on its next sync. Other
+  devices deleting a pulled copy only drop that copy and can pull again.
 - Pulling or refreshing a session includes additions other devices uploaded
   that the parent has not merged yet, so every device sees the latest
   conversation even while the parent is offline.

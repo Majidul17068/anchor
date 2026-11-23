@@ -10,7 +10,7 @@ export function deleteSessionMessage(session: Session, thisDeviceId?: string): s
   const isParent = !thisDeviceId || session.originDeviceId === thisDeviceId;
   const published = session.syncEnabled || session.syncState === 'published' || session.syncState === 'conflict';
   if (isParent && published) {
-    return 'This device is the parent source of the session, so it is removed from this device and from your Google Drive. Other devices keep only the copy they already pulled. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.';
+    return 'This device is the parent source of the session, so it is removed from this device, from your Google Drive, and from every other device the next time it syncs. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.';
   }
   if (isParent) {
     return 'Removed from Anchor on this device. The Antigravity CLI keeps the conversation and it comes back only if you continue it from the terminal.';

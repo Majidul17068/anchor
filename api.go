@@ -301,7 +301,7 @@ func (a *API) SessionsDelete(id string) error {
 		if isParent && (meta.SyncEnabled || meta.DriveFileID != "") {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
-			if err := a.sync.Unpublish(ctx, id); err != nil {
+			if err := a.sync.Delete(ctx, id); err != nil {
 				a.log.Printf("delete %s: could not remove from Drive: %v", id, err)
 				return fmt.Errorf("the session was not deleted: its copy on Google Drive could not be removed (%v). Reconnect Drive and try again, or switch Sync off first", err)
 			}

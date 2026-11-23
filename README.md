@@ -60,7 +60,8 @@ machines and in your own Google Drive.
   in to the same Google account, pull the session you want, and continue
   where you left off. The device that created a session is its *parent
   source*: it is the only one that can publish, unpublish or delete the
-  session from Drive, and it merges what other devices add. Every device
+  session from Drive (a delete reaches every other device on its next
+  sync), and it merges what other devices add. Every device
   keeps Drive current with its own additions, and pulls show the latest
   conversation even before the parent has merged. Drive is reached through
   Google Drive for Desktop, which must be installed and running; the Sync

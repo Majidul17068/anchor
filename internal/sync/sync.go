@@ -566,12 +566,59 @@ func (e *Engine) Unpublish(ctx context.Context, sessionID string) error {
 	return firstErr
 }
 
+// Delete is what the parent source does when the user deletes a published
+// session: the files leave Drive and a tombstone is left behind so every
+// other device removes its copy on its next sync, instead of keeping an
+// orphan. Switching sync off (pushParent) does not write a tombstone; that
+// only stops sharing and replicas keep what they have.
+func (e *Engine) Delete(ctx context.Context, sessionID string) error {
+	if err := e.Unpublish(ctx, sessionID); err != nil {
+		return err
+	}
+	if !e.drv.Connected() {
+		return nil
+	}
+	body, _ := json.Marshal(map[string]string{"sessionId": sessionID, "deletedBy": e.st.Device().ID, "deletedAt": store.Now()})
+	_, err := e.drv.PutApp(ctx, tombstoneName(sessionID), map[string]string{drive.PropKind: kindTombstone, drive.PropSession: sessionID}, body)
+	return err
+}
+
+const kindTombstone = "tombstone"
+
+func tombstoneName(id string) string { return "tombstone-" + id + ".json" }
+
+// tombstones lists the sessions parents deleted, by id.
+func (e *Engine) tombstones(ctx context.Context) map[string]bool {
+	out := map[string]bool{}
+	files, err := e.drv.ListApp(ctx, "tombstone-")
+	if err != nil {
+		return out
+	}
+	for _, f := range files {
+		id := strings.TrimSuffix(strings.TrimPrefix(f.Name, "tombstone-"), ".json")
+		if id != "" {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 // refreshReplicas updates sessions this device already pulled and notices
-// ones the parent unpublished. It does not pull new sessions.
+// ones the parent unpublished or deleted. It does not pull new sessions.
 func (e *Engine) refreshReplicas(ctx context.Context, idx *index, me string) (bool, error) {
 	changed := false
+	gone := e.tombstones(ctx)
 	for _, m := range e.st.ListSessions() {
-		if m.OriginDeviceID == me || (m.SyncState != model.SyncReplica && m.SyncState != model.SyncConflict) {
+		if m.OriginDeviceID == me || (m.SyncState != model.SyncReplica && m.SyncState != model.SyncConflict && !(gone[m.ID] && m.Unpublished)) {
+			continue
+		}
+		if gone[m.ID] {
+			// The parent deleted the chat: this copy goes too.
+			if m.ACPSessionID != "" {
+				_ = e.st.MarkDeleted(m.ACPSessionID, m.LastModified)
+			}
+			_ = e.st.DeleteSession(m.ID)
+			changed = true
 			continue
 		}
 		f, ok := idx.sessions[m.ID]
@@ -686,9 +733,10 @@ func (e *Engine) Available(ctx context.Context) ([]model.RemoteSession, error) {
 	for _, m := range e.st.ListSessions() {
 		local[m.ID] = true
 	}
+	gone := e.tombstones(ctx)
 	names := e.deviceNames(ctx)
 	for id, f := range idx.sessions {
-		if local[id] || f.Props[drive.PropOrigin] == me {
+		if local[id] || gone[id] || f.Props[drive.PropOrigin] == me {
 			continue
 		}
 		steps, _ := strconv.Atoi(f.Props[drive.PropSteps])
@@ -715,7 +763,7 @@ func (e *Engine) Pull(ctx context.Context, sessionID string) (model.Session, err
 		return model.Session{}, err
 	}
 	f, ok := idx.sessions[sessionID]
-	if !ok {
+	if !ok || e.tombstones(ctx)[sessionID] {
 		return model.Session{}, fmt.Errorf("session %s is not on Drive", shortID(sessionID))
 	}
 	if _, err := e.applyRemote(ctx, f, nil, idx.appends[sessionID]); err != nil {

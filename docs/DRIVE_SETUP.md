@@ -42,10 +42,13 @@ each one answers.
 ### Who may delete what
 
 The device that created a session (its parent source) is the only one that
-publishes, unpublishes or deletes it on Drive: deleting there removes the
-canonical file and any additions other devices uploaded. Deleting a pulled
-copy on another device removes only that copy; the session stays on Drive
-and can be pulled again.
+publishes, unpublishes or deletes it on Drive. Deleting there removes the
+canonical file and any additions other devices uploaded, and leaves a
+tombstone (`.anchor/devices/tombstone-<id>.json`) so every other device
+removes its copy on its next sync. Switching Sync *off* is different: the
+file leaves Drive but other devices keep the copy they already pulled.
+Deleting a pulled copy on another device removes only that copy; the session
+stays on Drive and can be pulled again.
 
 ## Alternative: the Drive API (needs a one-time OAuth client)
 

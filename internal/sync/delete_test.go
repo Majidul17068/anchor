@@ -25,7 +25,8 @@ func publish(t *testing.T, a *device, id, title string, steps ...model.Step) {
 }
 
 // The parent deleting a session removes its file and every append from
-// Drive; the replica keeps only what it already had, as a local copy.
+// Drive and leaves a tombstone; every replica drops its copy on its next
+// sync, and the session is never offered to pull again.
 func TestParentDeleteRemovesDriveCopyAndAppends(t *testing.T) {
 	t.Setenv("ANCHOR_HOME", "")
 	drv := newFakeDrive()
@@ -48,25 +49,59 @@ func TestParentDeleteRemovesDriveCopyAndAppends(t *testing.T) {
 		t.Fatalf("expected an append on drive: %v", drv.paths())
 	}
 
-	// A deletes: canonical and append both leave Drive.
+	// A deletes: canonical and append both leave Drive; a tombstone remains.
 	a.do(func() {
-		if err := a.eng.Unpublish(context.Background(), "s9"); err != nil {
+		if err := a.eng.Delete(context.Background(), "s9"); err != nil {
 			t.Fatal(err)
 		}
 	})
 	if drv.has("(s9)") {
 		t.Fatalf("drive still holds the deleted session: %v", drv.paths())
 	}
+	if !drv.has("tombstone-s9") {
+		t.Fatalf("no tombstone written: %v", drv.paths())
+	}
 
-	// B notices on its next sync and keeps a local, unsynced copy.
+	// B notices on its next sync: its copy goes, and nothing is offered to pull.
 	b.sync()
 	b.do(func() {
-		m, err := b.st.GetSession("s9")
-		if err != nil {
-			t.Fatal("replica vanished from B; it must stay as a local copy")
+		if _, err := b.st.GetSession("s9"); err == nil {
+			t.Fatal("replica survived the parent's delete")
 		}
-		if m.SyncEnabled || m.SyncState != model.SyncLocal || !m.Unpublished {
-			t.Fatalf("replica after parent delete = %+v unpublished=%v", m.Session, m.Unpublished)
+		if avail, _ := b.eng.Available(context.Background()); len(avail) != 0 {
+			t.Fatalf("deleted session still offered: %+v", avail)
+		}
+		if _, err := b.eng.Pull(context.Background(), "s9"); err == nil {
+			t.Fatal("pulling a deleted session must fail")
+		}
+	})
+}
+
+// Switching sync off is not a delete: replicas keep a local copy.
+func TestSyncOffKeepsReplicaCopies(t *testing.T) {
+	t.Setenv("ANCHOR_HOME", "")
+	drv := newFakeDrive()
+	a := newDevice(t, "A", drv)
+	b := newDevice(t, "B", drv)
+	publish(t, a, "s12", "Private later", step("user", "u1", "hi"))
+	b.sync()
+	b.do(func() {
+		if _, err := b.eng.Pull(context.Background(), "s12"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	a.do(func() {
+		m, _ := a.st.GetSession("s12")
+		m.SyncEnabled = false
+		m.LocalVersion++
+		_ = a.st.SaveSession(m)
+	})
+	a.sync()
+	b.sync()
+	b.do(func() {
+		m, err := b.st.GetSession("s12")
+		if err != nil || !m.Unpublished || m.SyncEnabled {
+			t.Fatalf("replica after sync-off: err=%v meta=%+v", err, m)
 		}
 	})
 }
