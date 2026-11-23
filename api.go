@@ -706,12 +706,16 @@ func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
 	// Only Google Drive is taken without asking: the button says Google
 	// Drive. Other clouds found on the machine are offered, not assumed.
 	if gd, ok := folderdrive.GoogleDrive(cands); ok {
-		if !gd.Reachable {
-			// The folder is there but Drive for Desktop is not serving it.
-			// Say exactly that instead of hanging on the first write.
+		if gd.Reachable {
+			return a.useFolder(gd.Path)
+		}
+		// The folder is there but Drive for Desktop is not serving it. With
+		// an OAuth client configured the Drive API is the better route; only
+		// without one do we stop here and say exactly what is wrong, instead
+		// of hanging on the first write.
+		if !a.drive.Configured() {
 			return a.SyncStatus(), folderdrive.Check(gd.Path).Error()
 		}
-		return a.useFolder(gd.Path)
 	}
 	if a.drive.Configured() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
