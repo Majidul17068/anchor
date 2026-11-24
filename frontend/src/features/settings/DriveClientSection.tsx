@@ -23,6 +23,11 @@ export const DriveClientSection: React.FC<{ onShowToast?: (msg: string) => void 
   }, [settings.driveClientId, settings.driveClientSecret]);
 
   const configured = Boolean(settings.driveConfigured);
+  const pasted = Boolean(settings.driveClientId);
+  // A release that carries the client needs nothing from the user; the
+  // fields stay behind a disclosure for maintainers who want to override.
+  const [showFields, setShowFields] = useState(false);
+  const fieldsVisible = !configured || pasted || showFields;
 
   const handleSave = async () => {
     setSaving(true);
@@ -53,30 +58,47 @@ export const DriveClientSection: React.FC<{ onShowToast?: (msg: string) => void 
         </Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Input
-          label="Client ID"
-          placeholder="1234567890-abc.apps.googleusercontent.com"
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-        />
-        <Input
-          label="Client secret"
-          type="password"
-          placeholder="GOCSPX-…"
-          value={clientSecret}
-          onChange={(e) => setClientSecret(e.target.value)}
-        />
-      </div>
+      {!fieldsVisible ? (
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-[var(--anchor-text-muted)]">
+            Built into this release. Nothing to do here: <span className="text-[var(--anchor-text)]">Sync → Connect Google Drive</span> signs you in with your own account.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowFields(true)}
+            className="text-xs text-[var(--anchor-text-subtle)] hover:text-[var(--anchor-text)] underline underline-offset-2 cursor-pointer shrink-0"
+          >
+            Use a different client
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Input
+              label="Client ID"
+              placeholder="1234567890-abc.apps.googleusercontent.com"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+            <Input
+              label="Client secret"
+              type="password"
+              placeholder="GOCSPX-…"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+            />
+          </div>
 
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--anchor-text-subtle)]">
-          Create a <span className="font-mono">Desktop app</span> OAuth client in Google Cloud Console with the Drive API enabled; see docs/DRIVE_SETUP.md.
-        </p>
-        <Button size="sm" variant="primary" loading={saving} icon={<Check className="w-3.5 h-3.5" />} onClick={handleSave}>
-          Save
-        </Button>
-      </div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-[var(--anchor-text-subtle)]">
+              Create a <span className="font-mono">Desktop app</span> OAuth client in Google Cloud Console with the Drive API enabled; see docs/DRIVE_SETUP.md.
+            </p>
+            <Button size="sm" variant="primary" loading={saving} icon={<Check className="w-3.5 h-3.5" />} onClick={handleSave}>
+              Save
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 };

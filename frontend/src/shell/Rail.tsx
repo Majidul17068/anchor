@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useSettingsStore } from '../store/settings';
 import { useMarketStore } from '../store/market';
 import { useTheme } from '../hooks/useTheme';
+import { confirmDialog } from '../store/confirm';
 import { Avatar } from '../components/Avatar';
+import { Badge } from '../components/Badge';
 import { Tooltip } from '../components/Tooltip';
 import {
   Clock,
   Cpu,
   Layers,
+  LogOut,
   MessageSquare,
   Moon,
   RefreshCw,
@@ -16,6 +19,7 @@ import {
   ShoppingBag,
   Sun,
   Terminal,
+  UserRound,
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 
@@ -28,9 +32,40 @@ export interface RailProps {
 
 export const Rail: React.FC<RailProps> = ({ activeTab, onSelectTab }) => {
   const account = useAuthStore((s) => s.account);
+  const logout = useAuthStore((s) => s.logout);
   const cliStatus = useSettingsStore((s) => s.cliStatus);
   const updatesCount = useMarketStore((s) => s.updatesAvailable.length);
   const { isDark, toggleTheme } = useTheme();
+
+  // Account menu on the avatar: who is signed in, jump to Settings, sign out.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const handleSignOut = async () => {
+    setMenuOpen(false);
+    const ok = await confirmDialog({
+      title: 'Sign out of Google?',
+      message: 'Anchor and the Antigravity CLI on this device forget the account. Your conversations stay on this device and on Google Drive; sign in again to continue.',
+      confirmLabel: 'Sign out',
+      danger: true,
+    });
+    if (ok) await logout();
+  };
+
+  const planLabel = account?.planName || (account?.plan === 'google_ai_pro' ? 'Google AI Pro' : account?.plan === 'google_ai_ultra' ? 'Google AI Ultra' : account?.plan === 'free' ? 'Free' : '');
 
   const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
   const modKey = isMac ? '⌘' : 'Ctrl+';
@@ -160,24 +195,59 @@ export const Rail: React.FC<RailProps> = ({ activeTab, onSelectTab }) => {
           </button>
         </Tooltip>
 
-        {/* User Account */}
-        <Tooltip
-          side="right"
-          content={
-            <div className="text-left text-[11px]">
-              <div className="font-semibold text-[var(--anchor-text)]">{account?.name || 'Guest'}</div>
-              <div className="text-[10px] text-[var(--anchor-text-muted)]">{account?.email}</div>
+        {/* User Account: avatar opens a small menu */}
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            aria-label="Account menu"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            className={cn('rounded-full cursor-pointer ring-2 ring-transparent transition-shadow', menuOpen && 'ring-[var(--anchor-accent)]')}
+          >
+            <Avatar name={account?.name || 'Anchor User'} src={account?.avatarUrl} size="sm" />
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute left-12 bottom-0 w-64 rounded-xl border border-[var(--anchor-border)] bg-[var(--anchor-surface-elevated)] shadow-modal p-2 z-50 text-left animate-in fade-in zoom-in-95 duration-150"
+            >
+              <div className="flex items-center gap-3 px-2 py-2">
+                <Avatar name={account?.name || 'Anchor User'} src={account?.avatarUrl} size="md" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-[var(--anchor-text)] truncate">{account?.name || 'Not signed in'}</div>
+                  <div className="text-[11px] text-[var(--anchor-text-subtle)] font-mono truncate">{account?.email || 'Sign in from Settings'}</div>
+                </div>
+              </div>
+              {planLabel && (
+                <div className="px-2 pb-2">
+                  <Badge variant="accent" size="xs">{planLabel}</Badge>
+                </div>
+              )}
+              <div className="border-t border-[var(--anchor-border-subtle)] my-1" />
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onSelectTab('settings');
+                }}
+                className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-[var(--anchor-text)] hover:bg-[var(--anchor-surface-hover)] cursor-pointer"
+              >
+                <UserRound className="w-4 h-4 text-[var(--anchor-text-subtle)]" /> Account &amp; settings
+              </button>
+              {account && (
+                <button
+                  role="menuitem"
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-[var(--anchor-danger)] hover:bg-[var(--anchor-surface-hover)] cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" /> Sign out
+                </button>
+              )}
             </div>
-          }
-        >
-          <div className="cursor-pointer">
-            <Avatar
-              name={account?.name || 'Anchor User'}
-              src={account?.avatarUrl}
-              size="sm"
-            />
-          </div>
-        </Tooltip>
+          )}
+        </div>
       </div>
     </nav>
   );
