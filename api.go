@@ -89,6 +89,9 @@ func NewAPI(version string, logger *log.Logger) *API {
 	// when one was chosen.
 	a.folder = folderdrive.New(st.SettingString("syncFolder"))
 	a.sync = anchorsync.New(st, a.drive, a.emit, logf)
+	// When sync rewrites a transcript on disk, the chat engine must drop
+	// its in-memory copy (and tell the CLI what it missed on the next turn).
+	a.sync.OnSessionUpdated(a.eng.RefreshFromStore)
 	if a.folder.Connected() {
 		a.sync.SetDrive(a.folder, "folder", a.folder.Root(), folderdrive.KindOf(a.folder.Root()))
 	}
@@ -821,6 +824,20 @@ func (a *API) SyncPull(sessionID string) (model.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	return a.sync.Pull(ctx, sessionID)
+}
+
+// SyncRefresh exchanges one session with Drive right now ("Pull latest"):
+// the parent merges what other devices added and uploads its own changes;
+// a replica downloads the parent's latest transcript and uploads its
+// additions. Returns the session as it is afterwards.
+func (a *API) SyncRefresh(sessionID string) (model.Session, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := a.sync.RefreshSession(ctx, sessionID); err != nil {
+		return model.Session{}, err
+	}
+	s, _, err := a.eng.GetSession(sessionID)
+	return s, err
 }
 
 func (a *API) SyncDisconnectDrive() error {

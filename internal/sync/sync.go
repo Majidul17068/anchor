@@ -70,6 +70,42 @@ type Engine struct {
 	confl      map[string]model.Conflict
 	stop       chan struct{}
 	runMu      gosync.Mutex
+	// onUpdated is told whenever sync rewrote a session's transcript on
+	// disk (or removed the session), so the chat engine drops its cache.
+	onUpdated func(sessionID string)
+}
+
+// OnSessionUpdated registers the callback run after sync changes a
+// session's stored transcript: a replica refreshed from Drive, a parent that
+// merged another device's additions, or a copy removed by a tombstone.
+func (e *Engine) OnSessionUpdated(fn func(sessionID string)) {
+	e.mu.Lock()
+	e.onUpdated = fn
+	e.mu.Unlock()
+}
+
+func (e *Engine) updated(id string) {
+	e.mu.Lock()
+	fn := e.onUpdated
+	e.mu.Unlock()
+	if fn != nil {
+		fn(id)
+	}
+	if e.emit != nil {
+		e.emit("session:updated", map[string]any{"sessionId": id})
+	}
+}
+
+// syncState is the part of the status that survives a restart.
+type syncState struct {
+	LastSyncAt string `json:"lastSyncAt"`
+}
+
+func (e *Engine) saveState() {
+	e.mu.Lock()
+	st := syncState{LastSyncAt: e.status.LastSyncAt}
+	e.mu.Unlock()
+	_ = e.st.WriteBlob(paths.AnchorDir(), "sync-state", st)
 }
 
 // SetDrive switches the storage backend. backend is "api" or "folder";
@@ -110,6 +146,10 @@ func New(st *store.Store, drv Drive, emit func(string, any), logf func(string, .
 	_ = st.ReadBlob(paths.AnchorDir(), "conflicts", &e.confl)
 	if e.confl == nil {
 		e.confl = map[string]model.Conflict{}
+	}
+	var saved syncState
+	if st.ReadBlob(paths.AnchorDir(), "sync-state", &saved) == nil {
+		e.status.LastSyncAt = saved.LastSyncAt
 	}
 	return e
 }
@@ -307,10 +347,57 @@ func (e *Engine) SyncNow(ctx context.Context) (model.SyncStatus, error) {
 		s.LastSyncAt = store.Now()
 		s.UsageBytes = idx.usage
 	})
+	e.saveState()
 	if changed && e.emit != nil {
 		e.emit("sessions:changed", map[string]any{"source": "sync"})
 	}
 	return e.Status(), nil
+}
+
+// RefreshSession brings one session up to date with Drive right now, in
+// both directions: a parent uploads its own changes and merges what other
+// devices appended; a replica downloads the parent's latest transcript plus
+// any unmerged appends and uploads its own additions. This is what "Pull
+// latest" in the chat header does; the 30 s poll does the same for every
+// session.
+func (e *Engine) RefreshSession(ctx context.Context, sessionID string) error {
+	if !e.drv.Connected() {
+		return fmt.Errorf("DRIVE_NOT_CONNECTED: connect Google Drive first")
+	}
+	e.runMu.Lock()
+	defer e.runMu.Unlock()
+	m, err := e.st.GetSession(sessionID)
+	if err != nil {
+		return fmt.Errorf("session not found")
+	}
+	idx, err := e.list(ctx)
+	if err != nil {
+		return err
+	}
+	me := e.st.Device().ID
+	changed := false
+	if m.OriginDeviceID == me {
+		changed, err = e.pushParent(ctx, m, idx)
+	} else {
+		gone := e.tombstones(ctx)
+		if changed, err = e.refreshOne(ctx, idx, m, gone); err == nil && !gone[m.ID] {
+			if m, err = e.st.GetSession(sessionID); err == nil {
+				_, err = e.pushReplica(ctx, m, idx)
+			}
+		}
+	}
+	if err != nil {
+		return err
+	}
+	e.setStatus(func(s *model.SyncStatus) {
+		s.LastSyncAt = store.Now()
+		s.UsageBytes = idx.usage
+	})
+	e.saveState()
+	if changed && e.emit != nil {
+		e.emit("sessions:changed", map[string]any{"source": "sync", "sessionId": sessionID})
+	}
+	return nil
 }
 
 func (e *Engine) pushDevice(ctx context.Context) error {
@@ -464,6 +551,10 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, idx *inde
 			_ = e.st.SaveSteps(m.ID, steps)
 			m.StepCount = len(steps)
 			m.LocalVersion++
+			m.LastModified = store.Now()
+			m.CachedAt = m.LastModified
+			_ = e.st.SaveSession(m)
+			e.updated(m.ID)
 		}
 	}
 	if m.SyncState == model.SyncConflict {
@@ -499,6 +590,7 @@ func (e *Engine) pushParent(ctx context.Context, m *store.SessionMeta, idx *inde
 		}
 		m.DriveFileID = f.ID
 		m.SyncState = model.SyncPublished
+		m.LastSyncedAt = store.Now()
 		return true, e.st.SaveSession(m)
 	}
 	return changed, nil
@@ -527,6 +619,8 @@ func (e *Engine) pushReplica(ctx context.Context, m *store.SessionMeta, idx *ind
 	if _, err := e.drv.PutIn(ctx, canonical.ParentID, appendName(m.Title, m.ID, me), props, b); err != nil {
 		return false, err
 	}
+	m.LastSyncedAt = store.Now()
+	_ = e.st.SaveSession(m)
 	return false, nil
 }
 
@@ -609,41 +703,49 @@ func (e *Engine) refreshReplicas(ctx context.Context, idx *index, me string) (bo
 	changed := false
 	gone := e.tombstones(ctx)
 	for _, m := range e.st.ListSessions() {
-		if m.OriginDeviceID == me || (m.SyncState != model.SyncReplica && m.SyncState != model.SyncConflict && !(gone[m.ID] && m.Unpublished)) {
+		if m.OriginDeviceID == me {
 			continue
 		}
-		if gone[m.ID] {
-			// The parent deleted the chat: this copy goes too.
-			if m.ACPSessionID != "" {
-				_ = e.st.MarkDeleted(m.ACPSessionID, m.LastModified)
-			}
-			_ = e.st.DeleteSession(m.ID)
-			changed = true
-			continue
-		}
-		f, ok := idx.sessions[m.ID]
-		if !ok {
-			if m.DriveFileID != "" {
-				// The parent switched sync off: keep the local copy, stop syncing.
-				m.SyncEnabled = false
-				m.SyncState = model.SyncLocal
-				m.Unpublished = true
-				m.DriveFileID = ""
-				_ = e.st.SaveSession(m)
-				changed = true
-			}
-			continue
-		}
-		if m.RemoteVersion > 0 && m.DriveFileID == f.ID && f.Modified != "" && f.Modified <= m.LastModified && m.LocalVersion == m.RemoteVersion && len(idx.appends[m.ID]) == 0 {
-			continue // unchanged
-		}
-		if c, err := e.applyRemote(ctx, f, m, idx.appends[m.ID]); err != nil {
+		c, err := e.refreshOne(ctx, idx, m, gone)
+		if err != nil {
 			e.logf("refresh %s: %v", m.ID, err)
-		} else {
-			changed = changed || c
 		}
+		changed = changed || c
 	}
 	return changed, nil
+}
+
+// refreshOne updates one replica from Drive; see refreshReplicas.
+func (e *Engine) refreshOne(ctx context.Context, idx *index, m *store.SessionMeta, gone map[string]bool) (bool, error) {
+	if m.SyncState != model.SyncReplica && m.SyncState != model.SyncConflict && !(gone[m.ID] && m.Unpublished) {
+		return false, nil
+	}
+	if gone[m.ID] {
+		// The parent deleted the chat: this copy goes too.
+		if m.ACPSessionID != "" {
+			_ = e.st.MarkDeleted(m.ACPSessionID, m.LastModified)
+		}
+		_ = e.st.DeleteSession(m.ID)
+		e.updated(m.ID)
+		return true, nil
+	}
+	f, ok := idx.sessions[m.ID]
+	if !ok {
+		if m.DriveFileID != "" {
+			// The parent switched sync off: keep the local copy, stop syncing.
+			m.SyncEnabled = false
+			m.SyncState = model.SyncLocal
+			m.Unpublished = true
+			m.DriveFileID = ""
+			_ = e.st.SaveSession(m)
+			return true, nil
+		}
+		return false, nil
+	}
+	if m.RemoteVersion > 0 && m.DriveFileID == f.ID && f.Modified != "" && f.Modified <= m.LastModified && m.LocalVersion == m.RemoteVersion && len(idx.appends[m.ID]) == 0 {
+		return false, nil // unchanged
+	}
+	return e.applyRemote(ctx, f, m, idx.appends[m.ID])
 }
 
 // applyRemote downloads a canonical session file and stores it locally as a
@@ -711,10 +813,15 @@ func (e *Engine) applyRemote(ctx context.Context, f drive.File, local *store.Ses
 	if meta.WorkspacePaths == nil {
 		meta.WorkspacePaths = []string{}
 	}
+	meta.LastSyncedAt = store.Now()
 	if err := e.st.SaveSteps(id, rs.Steps); err != nil {
 		return false, err
 	}
-	return true, e.st.SaveSession(meta)
+	if err := e.st.SaveSession(meta); err != nil {
+		return false, err
+	}
+	e.updated(id)
+	return true, nil
 }
 
 // Available lists sessions other devices published that this device has
