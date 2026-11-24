@@ -861,7 +861,30 @@ func (a *API) SettingsSet(patch map[string]any) error {
 	if _, ok := patch["cacheClearedAt"]; ok {
 		a.eng.Shutdown()
 	}
+	// Standing instructions (and the name they are attributed to) live in the
+	// CLI's global rules file so every session, in Anchor or the terminal,
+	// follows them. The CLI reads the file when a session starts, so running
+	// processes are recycled.
+	_, rules := patch["agentRules"]
+	_, first := patch["firstName"]
+	_, last := patch["lastName"]
+	if rules || first || last {
+		s := a.st.Settings()
+		author := strings.TrimSpace(strings.TrimSpace(asString(s["firstName"])) + " " + strings.TrimSpace(asString(s["lastName"])))
+		if err := engine.WriteGlobalRules(author, asString(s["agentRules"])); err != nil {
+			return fmt.Errorf("could not save the agent instructions: %w", err)
+		}
+		a.eng.Shutdown()
+	}
 	return nil
 }
+
+func asString(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+// SettingsRules returns the standing instructions currently in force.
+func (a *API) SettingsRules() string { return engine.ReadGlobalRules() }
 
 var _ = fmt.Sprintf

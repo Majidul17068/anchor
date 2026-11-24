@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSettingsStore } from '../../store/settings';
 import { Button } from '../../components/Button';
-import { CheckCircle2, Download, FolderSearch, Terminal } from 'lucide-react';
+import { CheckCircle2, Download, FolderSearch } from 'lucide-react';
 
 export interface StepCliInstallProps {
   onComplete: () => void;
@@ -29,23 +29,11 @@ export const StepCliInstall: React.FC<StepCliInstallProps> = ({ onComplete, isCo
 
   return (
     <div className="flex flex-col gap-3 text-left">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Terminal className="w-5 h-5 text-[var(--anchor-accent)]" />
-          <h4 className="text-sm font-semibold text-[var(--anchor-text)]">
-            1. Setting up Antigravity CLI
-          </h4>
-        </div>
-        {isCompleted && (
-          <span className="flex items-center gap-1 text-xs text-[var(--anchor-ok)] font-medium">
-            <CheckCircle2 className="w-4 h-4" /> Ready
-          </span>
-        )}
-      </div>
-
-      <p className="text-xs text-[var(--anchor-text-muted)] leading-relaxed">
-        Anchor communicates directly with Google&apos;s Antigravity CLI (<code className="font-mono text-[11px] text-[var(--anchor-accent)]">agy</code>) to execute agent loops, model calls, and local workspaces.
-      </p>
+      {isCompleted && (
+        <span className="flex items-center gap-1 text-xs text-[var(--anchor-ok)] font-medium">
+          <CheckCircle2 className="w-4 h-4" /> Ready
+        </span>
+      )}
 
       {installingCli ? (
         <div className="p-3 bg-[var(--anchor-surface-sunken)] rounded-lg border border-[var(--anchor-border)] space-y-2">
@@ -74,9 +62,6 @@ export const StepCliInstall: React.FC<StepCliInstallProps> = ({ onComplete, isCo
               Installed: {cliStatus.version}
             </span>
           </div>
-          <Button size="xs" variant="outline" onClick={onComplete}>
-            Next Step
-          </Button>
         </div>
       ) : (
         <div className="flex items-center gap-3">

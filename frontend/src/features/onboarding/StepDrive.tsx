@@ -2,7 +2,7 @@ import React from 'react';
 import { useSyncStore } from '../../store/sync';
 import { Button } from '../../components/Button';
 import { DriveHelp, folderKindLabel } from '../sync/DriveHelp';
-import { CheckCircle2, HardDrive, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ShieldCheck } from 'lucide-react';
 
 export interface StepDriveProps {
   onComplete: () => void;
@@ -22,22 +22,14 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
 
   return (
     <div className="flex flex-col gap-3 text-left">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <HardDrive className="w-5 h-5 text-[var(--anchor-accent)]" />
-          <h4 className="text-sm font-semibold text-[var(--anchor-text)]">
-            4. Connect Google Drive for sync (Optional)
-          </h4>
-        </div>
-        {isCompleted && syncStatus?.driveConnected && (
-          <span className="flex items-center gap-1 text-xs text-[var(--anchor-ok)] font-medium">
-            <CheckCircle2 className="w-4 h-4" /> Connected
-          </span>
-        )}
-      </div>
+      {isCompleted && syncStatus?.driveConnected && (
+        <span className="flex items-center gap-1 text-xs text-[var(--anchor-ok)] font-medium">
+          <CheckCircle2 className="w-4 h-4" /> Connected
+        </span>
+      )}
 
       <p className="text-xs text-[var(--anchor-text-muted)] leading-relaxed">
-        Connecting once creates an <code className="font-mono text-[11px] text-[var(--anchor-accent)]">Anchor</code> folder in your own Google Drive. Sessions you switch Sync on for are saved there under <code className="font-mono text-[11px] text-[var(--anchor-accent)]">Anchor/year/month/day</code>, and any other device signed in to the same Google account can pull them and continue where you left off. No third-party servers ever touch your sessions, tokens, or skills.
+        Connecting creates an <code className="font-mono text-[11px] text-[var(--anchor-accent)]">Anchor</code> folder in your own Google Drive. Sessions you switch Sync on for are saved there under <code className="font-mono text-[11px] text-[var(--anchor-accent)]">Anchor/year/month/day</code>; any other device signed in to the same account can pull them and continue. No third-party servers touch your sessions, tokens, or skills.
       </p>
 
       <div className="flex items-center gap-2 p-2.5 bg-[var(--anchor-surface-sunken)] rounded-lg border border-[var(--anchor-border)] text-xs text-[var(--anchor-text-subtle)]">
@@ -58,9 +50,6 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
                 `Connected as ${syncStatus.driveEmail || 'Primary Account'}`
               )}
             </span>
-            <Button size="xs" variant="outline" onClick={onComplete}>
-              Continue
-            </Button>
           </div>
         ) : (
           <div className="flex items-center gap-3">
@@ -70,10 +59,7 @@ export const StepDrive: React.FC<StepDriveProps> = ({ onComplete, isCompleted })
               loading={isSyncing}
               onClick={handleConnect}
             >
-              Connect Google Drive Storage
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onComplete}>
-              Skip for now
+              Connect Google Drive
             </Button>
           </div>
         )}

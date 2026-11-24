@@ -444,6 +444,10 @@ func (e *Engine) accountFromCLI(prev *model.Account) *model.Account {
 			a.Name = "Google account"
 		}
 	}
+	// The name the user typed in onboarding wins over what Google supplies.
+	if first := strings.TrimSpace(e.st.SettingString("firstName")); first != "" {
+		a.Name = strings.TrimSpace(first + " " + strings.TrimSpace(e.st.SettingString("lastName")))
+	}
 	if t := e.Tier(); t != nil {
 		a.Plan = planFromTier(t)
 		a.PlanName, a.UpgradeURL = t.Name, t.UpgradeURI

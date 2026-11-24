@@ -3,7 +3,7 @@ import { useAuthStore } from '../../store/auth';
 import { Button } from '../../components/Button';
 import { Avatar } from '../../components/Avatar';
 import { Badge } from '../../components/Badge';
-import { CheckCircle2, Globe, LogIn } from 'lucide-react';
+import { CheckCircle2, LogIn } from 'lucide-react';
 
 export interface StepSignInProps {
   onComplete: () => void;
@@ -39,23 +39,11 @@ export const StepSignIn: React.FC<StepSignInProps> = ({ onComplete, isCompleted 
 
   return (
     <div className="flex flex-col gap-3 text-left">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-[var(--anchor-accent)]" />
-          <h4 className="text-sm font-semibold text-[var(--anchor-text)]">
-            2. Sign in with Google
-          </h4>
-        </div>
-        {isCompleted && account && (
-          <span className="flex items-center gap-1 text-xs text-[var(--anchor-ok)] font-medium">
-            <CheckCircle2 className="w-4 h-4" /> Authenticated
-          </span>
-        )}
-      </div>
-
-      <p className="text-xs text-[var(--anchor-text-muted)] leading-relaxed">
-        Use the Google account that has your AI subscription (Google AI Pro or Ultra). Anchor authenticates directly via local OAuth loopback.
-      </p>
+      {isCompleted && account && (
+        <span className="flex items-center gap-1 text-xs text-[var(--anchor-ok)] font-medium">
+          <CheckCircle2 className="w-4 h-4" /> Signed in
+        </span>
+      )}
 
       {account ? (
         <div className="flex items-center justify-between p-3 bg-[var(--anchor-surface-sunken)] rounded-lg border border-[var(--anchor-border)]">
@@ -92,7 +80,7 @@ export const StepSignIn: React.FC<StepSignInProps> = ({ onComplete, isCompleted 
             icon={<LogIn className="w-4 h-4" />}
             onClick={handleLogin}
           >
-            Sign in with Google Account
+            Sign in with Google
           </Button>
           {error && (
             <p role="alert" className="text-xs text-[var(--anchor-danger)] leading-relaxed">

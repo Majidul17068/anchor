@@ -60,7 +60,8 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const cli = useSettingsStore.getState().cliStatus;
       const acc = useAuthStore.getState().account;
-      if (params.get('onboarding') === '1' || !cli?.installed || !acc) {
+      const firstRun = !useSettingsStore.getState().settings.onboardingCompletedAt;
+      if (params.get('onboarding') === '1' || !cli?.installed || !acc || firstRun) {
         setShowOnboarding(true);
       } else {
         loadSessions();

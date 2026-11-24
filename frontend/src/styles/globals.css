@@ -70,3 +70,32 @@
 .animate-pulse-subtle {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Onboarding: a calm logo intro and step transitions. */
+@keyframes anchor-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes anchor-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes anchor-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes anchor-glow {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
+}
+.anchor-rise { animation: anchor-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.anchor-rise-delay-1 { animation-delay: 120ms; }
+.anchor-rise-delay-2 { animation-delay: 240ms; }
+.anchor-rise-delay-3 { animation-delay: 360ms; }
+.anchor-orbit { animation: anchor-orbit 9s linear infinite; }
+.anchor-orbit-slow { animation: anchor-orbit 16s linear infinite reverse; }
+.anchor-float { animation: anchor-float 5s ease-in-out infinite; }
+.anchor-glow { animation: anchor-glow 4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .anchor-rise, .anchor-orbit, .anchor-orbit-slow, .anchor-float, .anchor-glow { animation: none; }
+}
