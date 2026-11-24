@@ -147,15 +147,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish, mode = 'first-
       >
         <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-[var(--anchor-accent)] opacity-20 blur-3xl anchor-glow" />
         <div className="relative">
-          <div className="relative w-28 h-28 anchor-float">
-            <div className="absolute inset-0 rounded-full border border-[var(--anchor-accent)]/30 anchor-orbit">
-              <span className="absolute -top-1 left-1/2 w-2 h-2 -ml-1 rounded-full bg-[var(--anchor-accent)] shadow-[0_0_12px_var(--anchor-accent)]" />
-            </div>
-            <div className="absolute inset-3 rounded-full border border-[var(--anchor-accent)]/15 anchor-orbit-slow">
-              <span className="absolute top-1/2 -right-0.5 w-1.5 h-1.5 -mt-0.5 rounded-full bg-[var(--anchor-accent)]/70" />
-            </div>
-            <div className="absolute inset-6 rounded-2xl bg-[var(--anchor-accent)] text-white flex items-center justify-center shadow-lg shadow-[var(--anchor-accent)]/30 anchor-rise">
-              <AnchorGlyph size={34} className="text-white" />
+          {/* The logo itself: the white anchor on the indigo tile, nothing else. */}
+          <div className="relative w-24 h-24 anchor-float">
+            <div className="absolute inset-0 rounded-[26px] bg-[var(--anchor-accent)] opacity-40 blur-xl anchor-glow" />
+            <div className="absolute inset-0 rounded-[26px] bg-gradient-to-b from-[#7b6cf0] to-[#5a4bd6] text-white flex items-center justify-center shadow-xl shadow-[var(--anchor-accent)]/30 anchor-rise">
+              <AnchorGlyph size={52} className="text-white" />
             </div>
           </div>
           <h1 className="mt-8 text-2xl font-bold tracking-tight anchor-rise anchor-rise-delay-1">Anchor</h1>
