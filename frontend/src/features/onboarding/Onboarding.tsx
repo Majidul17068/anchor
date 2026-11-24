@@ -21,6 +21,18 @@ export interface OnboardingProps {
 
 type StepId = 'welcome' | 'cli' | 'signin' | 'profile' | 'drive' | 'launch';
 
+/** Fixed positions for the drifting lights behind the logo (no randomness, so the panel is stable across renders). */
+const PARTICLES = [
+  { x: '18%', y: '62%', s: 3, o: 0.55, d: '14s', delay: '0s' },
+  { x: '64%', y: '70%', s: 2, o: 0.45, d: '18s', delay: '3s' },
+  { x: '80%', y: '48%', s: 4, o: 0.35, d: '16s', delay: '6s' },
+  { x: '36%', y: '84%', s: 2, o: 0.5, d: '20s', delay: '1s' },
+  { x: '52%', y: '56%', s: 3, o: 0.3, d: '15s', delay: '8s' },
+  { x: '10%', y: '40%', s: 2, o: 0.4, d: '22s', delay: '4s' },
+  { x: '72%', y: '28%', s: 2, o: 0.35, d: '17s', delay: '10s' },
+  { x: '44%', y: '36%', s: 3, o: 0.25, d: '19s', delay: '12s' },
+];
+
 interface StepDef {
   id: StepId;
   label: string;
@@ -145,14 +157,38 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish, mode = 'first-
         style={{ ['--wails-draggable' as string]: 'drag' }}
         className="w-[38%] min-w-[320px] max-w-[460px] h-full border-r border-[var(--anchor-border)] bg-[var(--anchor-surface-sunken)] flex flex-col justify-between px-10 pb-10 pt-16 relative overflow-hidden"
       >
-        <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-[var(--anchor-accent)] opacity-20 blur-3xl anchor-glow" />
+        {/* Backdrop graphics: faint grid, two colour washes, drifting light, slow waves. */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div
+            className="absolute inset-0 opacity-[0.07]"
+            style={{
+              backgroundImage: 'linear-gradient(var(--anchor-text) 1px, transparent 1px), linear-gradient(90deg, var(--anchor-text) 1px, transparent 1px)',
+              backgroundSize: '44px 44px',
+              maskImage: 'radial-gradient(ellipse at 30% 25%, black 20%, transparent 75%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at 30% 25%, black 20%, transparent 75%)',
+            }}
+          />
+          <div className="absolute -top-28 -left-28 w-[26rem] h-[26rem] rounded-full bg-[var(--anchor-accent)] opacity-25 blur-3xl anchor-glow" />
+          <div className="absolute bottom-16 -right-24 w-80 h-80 rounded-full bg-[#1fb6a6] opacity-10 blur-3xl anchor-glow" style={{ animationDelay: '2s' }} />
+          {PARTICLES.map((p, i) => (
+            <span
+              key={i}
+              className="absolute rounded-full bg-white anchor-drift"
+              style={{ left: p.x, top: p.y, width: p.s, height: p.s, opacity: p.o, animationDuration: p.d, animationDelay: p.delay }}
+            />
+          ))}
+          <svg className="absolute bottom-0 left-0 w-[200%] h-44 opacity-40 anchor-wave" viewBox="0 0 800 160" preserveAspectRatio="none" fill="none">
+            <path d="M0 110 C 60 90, 100 130, 160 110 S 260 90, 320 110 S 420 130, 480 110 S 580 90, 640 110 S 740 130, 800 110" stroke="var(--anchor-accent)" strokeWidth="1.5" />
+            <path d="M0 130 C 60 110, 100 150, 160 130 S 260 110, 320 130 S 420 150, 480 130 S 580 110, 640 130 S 740 150, 800 130" stroke="var(--anchor-accent)" strokeWidth="1" opacity="0.6" />
+            <path d="M0 150 C 60 130, 100 170, 160 150 S 260 130, 320 150 S 420 170, 480 150 S 580 130, 640 150 S 740 170, 800 150" stroke="#1fb6a6" strokeWidth="1" opacity="0.5" />
+          </svg>
+        </div>
+
         <div className="relative">
-          {/* The logo itself: the white anchor on the indigo tile, nothing else. */}
-          <div className="relative w-24 h-24 anchor-float">
-            <div className="absolute inset-0 rounded-[26px] bg-[var(--anchor-accent)] opacity-40 blur-xl anchor-glow" />
-            <div className="absolute inset-0 rounded-[26px] bg-gradient-to-b from-[#7b6cf0] to-[#5a4bd6] text-white flex items-center justify-center shadow-xl shadow-[var(--anchor-accent)]/30 anchor-rise">
-              <AnchorGlyph size={52} className="text-white" />
-            </div>
+          {/* The logo itself: the white anchor, lit from behind. */}
+          <div className="relative w-28 h-28 flex items-center justify-center anchor-float">
+            <div className="absolute inset-2 rounded-full bg-[var(--anchor-accent)] opacity-50 blur-2xl anchor-glow" />
+            <AnchorGlyph size={92} className="relative text-white drop-shadow-[0_0_18px_rgba(108,92,231,0.75)] anchor-rise" />
           </div>
           <h1 className="mt-8 text-2xl font-bold tracking-tight anchor-rise anchor-rise-delay-1">Anchor</h1>
           <p className="mt-1 text-sm text-[var(--anchor-text-muted)] anchor-rise anchor-rise-delay-2">Your Antigravity, anchored to you.</p>

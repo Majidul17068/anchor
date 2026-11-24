@@ -96,6 +96,18 @@
 .anchor-orbit-slow { animation: anchor-orbit 16s linear infinite reverse; }
 .anchor-float { animation: anchor-float 5s ease-in-out infinite; }
 .anchor-glow { animation: anchor-glow 4s ease-in-out infinite; }
+@keyframes anchor-drift {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(-140px) translateX(18px); opacity: 0; }
+}
+@keyframes anchor-wave {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.anchor-drift { animation: anchor-drift 16s linear infinite; }
+.anchor-wave { animation: anchor-wave 24s linear infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .anchor-rise, .anchor-orbit, .anchor-orbit-slow, .anchor-float, .anchor-glow { animation: none; }
+  .anchor-rise, .anchor-orbit, .anchor-orbit-slow, .anchor-float, .anchor-glow, .anchor-drift, .anchor-wave { animation: none; }
 }
