@@ -157,9 +157,10 @@ export default function App() {
   }
 
   if (showOnboarding) {
+    const returning = Boolean(useSettingsStore.getState().settings.onboardingCompletedAt);
     return (
       <>
-        <Onboarding onFinish={finishOnboarding} />
+        <Onboarding onFinish={finishOnboarding} mode={returning ? 'sign-in' : 'first-run'} />
         <ConfirmHost />
       </>
     );

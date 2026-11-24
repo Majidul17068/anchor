@@ -224,7 +224,24 @@ func (a *API) AuthLogin() (*model.Account, error) {
 	return acc, err
 }
 
-func (a *API) AuthLogout() error { return a.eng.Logout() }
+// AuthLogout signs the Google account out of the CLI and Anchor. The Drive
+// connection belongs to that account too, so it is dropped as well; a
+// different person signing in next must not inherit the previous Drive.
+func (a *API) AuthLogout() error {
+	err := a.eng.Logout()
+	if a.drive.Connected() {
+		if derr := a.drive.Disconnect(); derr != nil && err == nil {
+			err = derr
+		}
+	}
+	if a.folder.Root() != "" {
+		a.folder.SetRoot("")
+		_ = a.st.SetSettings(map[string]any{"syncFolder": ""})
+		a.sync.SetDrive(a.drive, "api", "", "")
+	}
+	a.emit("sync:status", a.SyncStatus())
+	return err
+}
 
 func (a *API) DevicesThis() model.Device {
 	d := a.st.Device()

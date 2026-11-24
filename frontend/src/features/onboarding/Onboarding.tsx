@@ -12,6 +12,11 @@ import { ArrowLeft, ArrowRight, Check, Cloud, Rocket, ShieldCheck, Terminal, Use
 
 export interface OnboardingProps {
   onFinish: () => void;
+  /**
+   * 'first-run' walks every step; 'sign-in' is what a returning user sees
+   * after signing out: only the Google step, then straight back in.
+   */
+  mode?: 'first-run' | 'sign-in';
 }
 
 type StepId = 'welcome' | 'cli' | 'signin' | 'profile' | 'drive' | 'launch';
@@ -30,7 +35,7 @@ interface StepDef {
  * already satisfies (CLI installed, signed in) are shown as done but can be
  * walked through; the CLI step is skipped entirely when agy is present.
  */
-export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
+export const Onboarding: React.FC<OnboardingProps> = ({ onFinish, mode = 'first-run' }) => {
   const cliStatus = useSettingsStore((s) => s.cliStatus);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const account = useAuthStore((s) => s.account);
@@ -51,10 +56,24 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
       { id: 'drive', label: 'Google Drive', title: 'Keep your sessions with you', lead: 'Optional. Connect your own Google Drive and any device signed in to the same account can pick up where you stopped.', icon: <Cloud className="w-4 h-4" /> },
       { id: 'launch', label: 'Launch', title: 'You are set', lead: 'Everything below can be changed later in Settings.', icon: <Rocket className="w-4 h-4" /> },
     ];
+    if (mode === 'sign-in') {
+      // Returning user: the CLI step only if it went missing, then sign in.
+      return all.filter((s) => s.id === 'signin' || (s.id === 'cli' && !cliReady)).map((s) =>
+        s.id === 'signin' ? { ...s, title: 'Welcome back', lead: 'Sign in with Google to continue. Your conversations, devices and settings are still here.' } : s
+      );
+    }
     return cliReady ? all.filter((s) => s.id !== 'cli') : all;
-  }, [cliReady]);
+  }, [cliReady, mode]);
 
   const [index, setIndex] = useState(0);
+
+  // In sign-in mode a successful sign-in is the whole job.
+  useEffect(() => {
+    if (mode === 'sign-in' && signedIn) {
+      const t = setTimeout(onFinish, 350);
+      return () => clearTimeout(t);
+    }
+  }, [mode, signedIn, onFinish]);
   const [launching, setLaunching] = useState(false);
   const [saving, setSaving] = useState(false);
   const profileSave = useRef<(() => Promise<boolean>) | null>(null);
@@ -212,9 +231,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
             ) : (
               <div className="flex flex-col gap-6">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--anchor-accent)]">
-                    Step {index} of {steps.length - 1}
-                  </p>
+                  {mode !== 'sign-in' && (
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--anchor-accent)]">
+                      Step {index} of {steps.length - 1}
+                    </p>
+                  )}
                   <h2 className="mt-2 text-2xl font-bold tracking-tight">{step.title}</h2>
                   <p className="mt-2 text-sm text-[var(--anchor-text-muted)] leading-relaxed">{step.lead}</p>
                 </div>
@@ -257,7 +278,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
           </div>
         </div>
 
-        {step.id !== 'welcome' && step.id !== 'launch' && (
+        {step.id !== 'welcome' && step.id !== 'launch' && mode !== 'sign-in' && (
           <footer className="shrink-0 border-t border-[var(--anchor-border)] bg-[var(--anchor-surface-sunken)] px-12 py-4 flex items-center justify-between">
             <Button variant="ghost" size="sm" icon={<ArrowLeft className="w-4 h-4" />} onClick={back}>
               Back

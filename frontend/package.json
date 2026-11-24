@@ -1,7 +1,7 @@
 {
   "name": "anchor",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Anchor UI — your Antigravity, anchored to you.",
   "type": "module",
   "scripts": {

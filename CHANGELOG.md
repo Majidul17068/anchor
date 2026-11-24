@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2 — A first run worth watching, and rules the agent keeps
+
+- Onboarding is a wizard: brand panel with a logo intro on the left, one
+  step per screen on the right, Back and Next that work. Returning users
+  who sign out get a single "Welcome back" sign-in screen instead.
+- New "About you" step and matching Settings section: first and last name,
+  device name with a Change button, and standing instructions the agent
+  follows in every conversation (written to the CLI's global rules file, so
+  terminal sessions follow them too).
+- The avatar in the rail opens an account menu with Sign out.
+- Sign out also disconnects Google Drive, so the next account starts clean.
+- Settings hides the Drive client fields when the release already carries one.
+
 ## 0.3.1 — Drive for everyone, account name back
 
 - Releases carry Anchor's Google OAuth client; the consent screen is in
