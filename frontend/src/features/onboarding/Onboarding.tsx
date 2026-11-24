@@ -121,7 +121,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
   return (
     <div className="h-screen w-screen bg-[var(--anchor-bg)] text-[var(--anchor-text)] flex select-none overflow-hidden">
       {/* Brand + progress panel */}
-      <aside className="w-[38%] min-w-[320px] max-w-[460px] h-full border-r border-[var(--anchor-border)] bg-[var(--anchor-surface-sunken)] flex flex-col justify-between p-10 relative overflow-hidden">
+      {/* Top padding clears the macOS window controls; the panel doubles as the drag region. */}
+      <aside
+        style={{ ['--wails-draggable' as string]: 'drag' }}
+        className="w-[38%] min-w-[320px] max-w-[460px] h-full border-r border-[var(--anchor-border)] bg-[var(--anchor-surface-sunken)] flex flex-col justify-between px-10 pb-10 pt-16 relative overflow-hidden"
+      >
         <div className="pointer-events-none absolute -top-24 -left-24 w-80 h-80 rounded-full bg-[var(--anchor-accent)] opacity-20 blur-3xl anchor-glow" />
         <div className="relative">
           <div className="relative w-28 h-28 anchor-float">
@@ -132,14 +136,14 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onFinish }) => {
               <span className="absolute top-1/2 -right-0.5 w-1.5 h-1.5 -mt-0.5 rounded-full bg-[var(--anchor-accent)]/70" />
             </div>
             <div className="absolute inset-6 rounded-2xl bg-[var(--anchor-accent)] text-white flex items-center justify-center shadow-lg shadow-[var(--anchor-accent)]/30 anchor-rise">
-              <AnchorGlyph size={34} />
+              <AnchorGlyph size={34} className="text-white" />
             </div>
           </div>
           <h1 className="mt-8 text-2xl font-bold tracking-tight anchor-rise anchor-rise-delay-1">Anchor</h1>
           <p className="mt-1 text-sm text-[var(--anchor-text-muted)] anchor-rise anchor-rise-delay-2">Your Antigravity, anchored to you.</p>
         </div>
 
-        <ol className="relative space-y-1 anchor-rise anchor-rise-delay-3">
+        <ol style={{ ['--wails-draggable' as string]: 'no-drag' }} className="relative space-y-1 anchor-rise anchor-rise-delay-3">
           {steps.map((s, i) => {
             const active = i === index;
             const complete = i < index || done(s.id);
