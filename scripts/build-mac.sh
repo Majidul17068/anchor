@@ -17,7 +17,25 @@ VERSION="${1:-0.0.0-local}"
 export PATH="$PATH:$HOME/go/bin"
 export ANCHOR_VERSION="$VERSION"   # the UI's title-bar version comes from the frontend build
 
-wails build -clean -ldflags "-X main.Version=${VERSION}" || true   # self-signing may fail on provenance-tracked folders
+# Google Drive OAuth client, baked in like the release workflow does. Taken
+# from the environment, else from .env.local (ignored by git), else from the
+# client pasted into Anchor's Settings on this machine (~/.anchor/settings.json).
+if [ -f .env.local ]; then
+  set -a; . ./.env.local; set +a
+fi
+if [ -z "${ANCHOR_GOOGLE_CLIENT_ID:-}" ] && [ -f "$HOME/.anchor/settings.json" ]; then
+  ANCHOR_GOOGLE_CLIENT_ID=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('driveClientId',''))" "$HOME/.anchor/settings.json" 2>/dev/null || true)
+  ANCHOR_GOOGLE_CLIENT_SECRET=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('driveClientSecret',''))" "$HOME/.anchor/settings.json" 2>/dev/null || true)
+fi
+DRIVE_FLAGS=""
+if [ -n "${ANCHOR_GOOGLE_CLIENT_ID:-}" ]; then
+  DRIVE_FLAGS="-X github.com/Majidul17068/anchor/internal/drive.BuildClientID=${ANCHOR_GOOGLE_CLIENT_ID} -X github.com/Majidul17068/anchor/internal/drive.BuildClientSecret=${ANCHOR_GOOGLE_CLIENT_SECRET:-}"
+  echo "Drive OAuth client: baked in"
+else
+  echo "Drive OAuth client: none (set ANCHOR_GOOGLE_CLIENT_ID/SECRET, .env.local, or paste it in Settings)" >&2
+fi
+
+wails build -clean -ldflags "-X main.Version=${VERSION} ${DRIVE_FLAGS}" || true   # self-signing may fail on provenance-tracked folders
 APP=$(ls -d build/bin/*.app | head -1)
 [ -d "$APP" ] || { echo "build failed: no .app in build/bin" >&2; exit 1; }
 
