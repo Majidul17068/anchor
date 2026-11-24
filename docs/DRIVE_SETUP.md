@@ -121,7 +121,17 @@ with app properties (`anchorKind`, `anchorSession`, `origin`, `anchorDay`,
 `anchorTitle`, `anchorSteps`), which is how Anchor finds them wherever they
 sit. Other devices do not download every published session: *Sync &
 Devices → Sessions on Drive from other devices* lists them and the user
-pulls the ones they want; pulled sessions then keep refreshing.
+pulls the ones they want; pulled sessions then keep refreshing every 30 s.
+
+*Pull latest* (chat header, synced sessions only) does one exchange for
+that session right away, in both directions: the parent merges what other
+devices appended and uploads its own changes; a replica downloads the
+parent's latest transcript plus any unmerged appends and uploads its own
+additions. The open transcript reloads, and the next prompt tells the agent
+what was said on the other device, so the conversation continues with full
+context. The tooltip shows when that session was last synced; the Sync
+page shows the last synchronization time, kept across restarts in
+`~/.anchor/sync-state.json`.
 
 You grant access once; the refresh token lives in
 `~/.anchor/drive-token.json` (mode 0600) and later launches reuse it.

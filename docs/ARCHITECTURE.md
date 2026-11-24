@@ -47,6 +47,12 @@ is hosted by Anchor.
   as slash commands in `available_commands_update`.
 - Full-text index: `~/.gemini/antigravity-cli/conversation_summaries.db`
   (FTS5 table `conversations_fts`), readable while the CLI runs.
+- Agent files (agy 1.5.16, verified 2026-11-24): `~/.gemini/config/agents/<name>.md`
+  and `plugins/<p>/agents/*.md` are listed by `agy agents` only when the
+  frontmatter's `commandExecutionPolicy` is absent or `auto`; `ask`,
+  `manual`, `never`, `always` make the CLI skip the file silently. Unknown
+  tool names and extra keys (`anchor:`) are accepted. Two concurrent
+  `session/load` calls for one session fail with "closed while loading".
 
 ## Components
 
@@ -114,6 +120,14 @@ Modes: `default` (ask), `plan`, `auto`, `accept-edits`.
 - If both sides moved since the last merge, the session is flagged
   `conflict`; the parent chooses *parent wins* or *merge*.
 - Devices announce themselves as `device-<id>.json`.
+- `sync.RefreshSession` (API `SyncRefresh`, "Pull latest") runs the
+  exchange for one session on demand. Whenever sync rewrites a transcript
+  on disk it calls `engine.RefreshFromStore`, which swaps the live cache and
+  queues the steps new to this process; the next `session/prompt` carries
+  them as a resource block so the CLI session knows what the other device
+  said. The UI gets `session:updated` and reloads the open chat.
+- `lastSyncAt` persists in `~/.anchor/sync-state.json`; each session keeps
+  `lastSyncedAt`.
 
 ## Skills, agents, sharing, marketplace
 
@@ -123,8 +137,14 @@ Modes: `default` (ask), `plan`, `auto`, `accept-edits`.
 - Train = run each example in a throwaway session with the skill folder as
   cwd, then a judge turn answers PASS/FAIL. Improve = accept-edits turn that
   rewrites SKILL.md from failures; both snapshot before changing.
-- Agents: `~/.gemini/config/agents/<name>.md`; a process per custom agent is
-  started with `agy acp --agent <name>` on demand.
+- Agents: `~/.gemini/config/agents/<name>.md` without a
+  `commandExecutionPolicy` (see the CLI facts above); a process per custom
+  agent is started with `agy acp --agent <name>` on demand. `Agent.discovered`
+  mirrors `agy agents`.
+- Marketplace listings have a `kind` (skill, agent, plugin). An agent is
+  published as its definition file and installed under the user's agents; a
+  plugin is published as its folder and installed through
+  `agy plugin install`; `~/.anchor/market/installed.json` tracks those two.
 - Sharing: skill folder mirrored to Drive `Anchor/Shared skills/<slug>`,
   shared with a Google account (reader) or by link; recipients see it under
   *Shared with me* and import it.

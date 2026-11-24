@@ -12,9 +12,11 @@ Default source: `https://raw.githubusercontent.com/Majidul17068/anchor-marketpla
 anchor-marketplace/
 ├── index.json          the catalog Anchor downloads (see schema below)
 ├── skills/<slug>/      each published skill folder (SKILL.md + files)
+├── agents/<slug>.md    each published agent definition
+├── plugins/<slug>/     each published plugin folder (plugin.json + files)
 ├── bundles/<slug>.zip  optional zip of the folder, referenced by bundleUrl
 └── .github/ISSUE_TEMPLATE/
-    ├── submission.yml  "[skill] …" issues opened by Publish
+    ├── submission.yml  "[skill] …", "[agent] …", "[plugin] …" issues opened by Publish
     ├── request.yml     "[request] …" issues opened by Requests
     └── review.yml      "[review] …" issues opened by reviews
 ```
@@ -22,6 +24,10 @@ anchor-marketplace/
 Maintainers fold accepted issues into `index.json` (by hand or with a small
 GitHub Action). Install counts are the number of accepted installs reported
 through issues or left at 0; ratings come from review issues.
+
+`kind` says what a listing contains: `skill` (default when missing), `agent`
+(one `.md` file in `files`) or `plugin` (the folder's text files, with
+`plugin.json` at the root).
 
 ## index.json schema
 
@@ -33,6 +39,7 @@ through issues or left at 0; ratings come from review issues.
   "listings": [
     {
       "id": "majidul/pr-reviewer",
+      "kind": "skill",
       "name": "PR Reviewer",
       "tagline": "Structured pull-request reviews with risk notes",
       "description": "Reviews a diff for correctness, security and style, then writes a summary in the repo's tone.",
@@ -80,9 +87,9 @@ Either `files` (inline) or `bundleUrl` (zip) must be present on a listing.
 | Action | Behaviour |
 |---|---|
 | Browse / search / featured | Reads `index.json` (cached 10 minutes, falls back to the last copy offline). |
-| Add to my skills | Writes the files into `~/.gemini/config/skills/<slug>` as *Acquired*; the CLI discovers it immediately. |
-| Check updates | Compares installed versions with the index. |
-| Publish | Validates (description length, secret scan), writes `listing.json` + `<slug>.zip` under `~/.anchor/market/submissions/<slug>/`, opens a prefilled GitHub issue for you to attach them. Appears under *My listings* as unlisted until merged. |
+| Add to my skills / agents, Install plugin | A skill's files go into `~/.gemini/config/skills/<slug>` as *Acquired*; an agent's file into `~/.gemini/config/agents/<slug>.md`; a plugin is written to a temporary folder and handed to `agy plugin install`. The CLI discovers all three immediately. |
+| Check updates | Compares installed versions with the index (skills, agents and plugins). |
+| Publish | Pick a skill from *Mine*, one of your agents (also from the agent card's *Share* button) or an installed plugin. Validates (description length, secret scan), writes `listing.json` + `<slug>.zip` under `~/.anchor/market/submissions/<slug>/`, opens a prefilled GitHub issue for you to attach them. Appears under *My listings* as unlisted until merged. |
 | Review | Opens a prefilled review issue. |
 | Request a skill | Opens a prefilled request issue; also kept locally under *My requests*. |
 | Notifications | Derived locally: updates available, requests addressed to you. |

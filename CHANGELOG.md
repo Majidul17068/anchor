@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.3 — Agents that run, a marketplace for agents and plugins, pull latest
+
+- Agents created in Anchor work again. The Antigravity CLI silently skips
+  any agent file whose `commandExecutionPolicy` is not `auto`; Anchor wrote
+  `ask`, so Test and `--agent` could not find them. New files leave the key
+  out, old files are repaired on the next listing, and a card shows "Not
+  seen by CLI" if the CLI still does not list it.
+- Opening a session from two places at once no longer breaks it ("closed
+  while loading", then "session not found"): loads are serialised.
+- Marketplace: publish your agents and plugins, not only skills. The Publish
+  wizard chooses what to share; agent cards have a Share button; listings
+  carry a kind badge; installing an agent puts it under your agents, a
+  plugin goes through `agy plugin install`.
+- Pull latest: a button in the chat header exchanges a synced session with
+  Google Drive right away in both directions, so a chat started on one
+  device, continued on another and picked up again shows everything, and
+  the agent is told what was said elsewhere. The open transcript also
+  reloads when the background sync merges another device's additions.
+- The Sync page shows when the last synchronization happened, including
+  after a restart; each session remembers when it was last synced.
+
 ## 0.3.2 — A first run worth watching, and rules the agent keeps
 
 - Onboarding is a wizard: brand panel with a logo intro on the left, one

@@ -52,8 +52,10 @@ machines and in your own Google Drive.
   [academic-research-skills](https://github.com/imbad0202/academic-research-skills))
   is converted by `agy plugin install`, agents, commands and hooks included; a
   plain repository becomes one skill built from its README.
-- **Marketplace**: a public catalog of community skills (a GitHub repository,
-  no server): browse, install, publish, request.
+- **Marketplace**: a public catalog of community skills, agents and plugins
+  (a GitHub repository, no server): browse, install, publish, request. Share
+  one of your agents from its card, or a plugin the CLI has installed, the
+  same way as a skill.
 - **Sync**: connecting Google Drive creates an `Anchor` folder in your own
   Drive. Switch Sync on for a session and it is saved there under
   `Anchor/YYYY/MM/DD/` (the day it was created). On any other device, sign
@@ -63,7 +65,12 @@ machines and in your own Google Drive.
   session from Drive (a delete reaches every other device on its next
   sync), and it merges what other devices add. Every device
   keeps Drive current with its own additions, and pulls show the latest
-  conversation even before the parent has merged. Drive is reached through
+  conversation even before the parent has merged. *Pull latest* in the chat
+  header exchanges the open session with Drive right away, in both
+  directions, so a chat started here, continued on another device and
+  picked up here again carries on with everything that was said; the agent
+  is told what happened on the other device. The Sync page shows when the
+  last synchronization happened, also after a restart. Drive is reached through
   Google Drive for Desktop, which must be installed and running; the Sync
   page says exactly what is missing, and `anchorctl drive` checks it from
   the terminal.
