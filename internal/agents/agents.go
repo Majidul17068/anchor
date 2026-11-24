@@ -42,6 +42,27 @@ type frontmatter struct {
 // DefaultTools are the CLI tool names an agent may be restricted to.
 var DefaultTools = []string{"view_file", "write_to_file", "replace_file_content", "grep_search", "find_by_name", "list_dir", "run_command", "browser", "web_search"}
 
+// The CLI (1.5.16) silently skips an agent file whose commandExecutionPolicy
+// is anything but "auto"; "ask", "manual", "never" and "always" all make the
+// agent vanish from `agy agents` and from --agent. Anchor leaves the key out
+// so the CLI applies its default (which asks through the permission prompt)
+// and repairs files written with the old value.
+func policyAccepted(p string) bool { return p == "" || p == "auto" }
+
+// repairPolicy rewrites a user agent file whose policy the CLI rejects.
+func repairPolicy(path string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	fm, body := parse(string(b))
+	if fm.Name == "" || policyAccepted(fm.CommandExecutionPolicy) {
+		return
+	}
+	fm.CommandExecutionPolicy = ""
+	_ = os.WriteFile(path, []byte(render(fm, body)), 0o644)
+}
+
 type Service struct {
 	loc *cli.Locator
 }
@@ -118,6 +139,7 @@ func (s *Service) List() ([]model.Agent, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
 			continue
 		}
+		repairPolicy(filepath.Join(paths.UserAgentsDir(), e.Name()))
 		if a, err := fromFile(filepath.Join(paths.UserAgentsDir(), e.Name()), "mine", "mine:"+strings.TrimSuffix(e.Name(), ".md")); err == nil {
 			out = append(out, *a)
 			seen[a.Name] = true
@@ -140,24 +162,41 @@ func (s *Service) List() ([]model.Agent, error) {
 			}
 		}
 	}
-	// Anything the CLI lists that we did not find on disk is builtin.
+	// Anything the CLI lists that we did not find on disk is builtin. The
+	// same listing tells which of our files the CLI actually accepted.
 	if bin, ok := s.loc.Find(); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		if txt, err := cli.Run(ctx, bin, "agents"); err == nil {
+			listed := map[string]bool{}
 			for _, line := range strings.Split(txt, "\n") {
 				fields := strings.Fields(line)
 				if len(fields) == 0 {
 					continue
 				}
 				name := fields[0]
-				if seen[name] || strings.HasPrefix(name, "Available") || strings.HasPrefix(name, "Fetching") || strings.HasPrefix(name, "-") {
+				if strings.HasPrefix(name, "Available") || strings.HasPrefix(name, "Fetching") || strings.HasPrefix(name, "-") {
+					continue
+				}
+				listed[name] = true
+				if seen[name] {
 					continue
 				}
 				out = append(out, model.Agent{ID: "builtin:" + name, Name: name, Description: "Built-in Antigravity agent", Source: "builtin",
-					ModelID: "gemini-4-argon", Effort: "medium", Tools: []string{}, SkillIDs: []string{}, MCPServers: []string{}})
+					ModelID: "gemini-4-argon", Effort: "medium", Tools: []string{}, SkillIDs: []string{}, MCPServers: []string{}, Discovered: true})
 				seen[name] = true
 			}
+			for i := range out {
+				out[i].Discovered = listed[out[i].Name]
+			}
+		} else {
+			for i := range out {
+				out[i].Discovered = true // unknown; do not alarm the user
+			}
+		}
+	} else {
+		for i := range out {
+			out[i].Discovered = true
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -213,7 +252,8 @@ func (s *Service) Save(in SaveInput) (*model.Agent, error) {
 	if tools == nil {
 		tools = []string{}
 	}
-	fm := frontmatter{Name: name, Description: strings.TrimSpace(in.Description), Tools: tools, MainAgent: true, Subagent: true, CommandExecutionPolicy: "ask",
+	// No commandExecutionPolicy: see policyAccepted.
+	fm := frontmatter{Name: name, Description: strings.TrimSpace(in.Description), Tools: tools, MainAgent: true, Subagent: true,
 		Anchor: &anchorFields{Model: in.ModelID, Effort: in.Effort, Skills: in.SkillIDs, MCPServers: in.MCPServers}}
 	body := strings.TrimSpace(in.Instructions)
 	if body == "" {

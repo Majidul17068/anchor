@@ -75,6 +75,9 @@ type Session struct {
 	CreatedAt      string    `json:"createdAt"`
 	LastModified   string    `json:"lastModified"`
 	Pinned         bool      `json:"pinned"`
+	// LastSyncedAt is when this device last exchanged this session with
+	// Drive (uploaded it, or refreshed it from the parent's copy).
+	LastSyncedAt string `json:"lastSyncedAt,omitempty"`
 }
 
 type Attachment struct {
@@ -128,6 +131,9 @@ type Agent struct {
 	Tools        []string `json:"tools"`
 	SkillIDs     []string `json:"skillIds"`
 	MCPServers   []string `json:"mcpServers"`
+	// Discovered is false when the file exists but `agy agents` does not
+	// list it, so --agent would fail; the UI shows why instead of a dead Test.
+	Discovered bool `json:"discovered"`
 }
 
 type SkillFile struct {

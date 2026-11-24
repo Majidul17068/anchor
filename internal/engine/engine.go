@@ -70,6 +70,13 @@ type live struct {
 	acpID     string
 	attached  bool
 	needsSeed bool
+	// attachMu serialises attach/reload: two concurrent session/load calls
+	// for one session made the CLI close the first ("closed while loading")
+	// and the second then failed with "session not found".
+	attachMu sync.Mutex
+	// unseen holds steps other devices added (merged in by Drive sync) that
+	// the CLI session has not been told about; the next prompt carries them.
+	unseen []model.Step
 
 	loading    bool
 	streamID   string
@@ -736,11 +743,8 @@ func (e *Engine) GetSession(id string) (model.Session, []model.Step, error) {
 		}
 	}
 	l := e.liveFor(meta)
-	l.mu.Lock()
-	stale := (len(l.steps) == 0 || meta.LastModified > meta.CachedAt) && l.streamID == ""
-	l.mu.Unlock()
-	if stale && meta.ACPSessionID != "" && meta.ACPSessionID == meta.ID {
-		if err := l.reload(); err != nil {
+	if meta.ACPSessionID != "" && meta.ACPSessionID == meta.ID {
+		if err := l.reloadIfStale(); err != nil {
 			e.logf("reload %s: %v", id, err)
 		}
 	}
@@ -748,6 +752,60 @@ func (e *Engine) GetSession(id string) (model.Session, []model.Step, error) {
 	steps := append([]model.Step(nil), l.steps...)
 	l.mu.Unlock()
 	return e.view(meta), steps, nil
+}
+
+// reloadIfStale replays the CLI's history when the cache is empty or the
+// CLI reports newer activity. Callers that race (the chat page and the
+// history page asking for the same session) queue behind one load instead
+// of issuing two.
+func (l *live) reloadIfStale() error {
+	l.attachMu.Lock()
+	defer l.attachMu.Unlock()
+	l.mu.Lock()
+	stale := (len(l.steps) == 0 || l.meta.LastModified > l.meta.CachedAt) && l.streamID == ""
+	l.mu.Unlock()
+	if !stale {
+		return nil
+	}
+	return l.reloadLocked()
+}
+
+// RefreshFromStore replaces the in-memory transcript of a session with what
+// is on disk after Drive sync changed it (a replica refreshed, a parent
+// merged another device's additions). Steps that are new to this process
+// are remembered so the next prompt tells the CLI about them; a session
+// mid-stream is left alone and picks the change up when its turn ends.
+func (e *Engine) RefreshFromStore(id string) {
+	meta, err := e.st.GetSession(id)
+	if err != nil {
+		e.mu.Lock()
+		if l, ok := e.live[id]; ok {
+			delete(e.live, id)
+			if l.acpID != "" {
+				delete(e.byACP, l.acpID)
+			}
+		}
+		e.mu.Unlock()
+		return
+	}
+	l := e.liveFor(meta)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.streamID != "" {
+		return
+	}
+	fresh := e.st.Steps(id)
+	have := map[string]bool{}
+	for _, s := range l.steps {
+		have[s.ID] = true
+	}
+	for _, s := range fresh {
+		if !have[s.ID] && (s.Kind == "user" || s.Kind == "agent") {
+			l.unseen = append(l.unseen, s)
+		}
+	}
+	l.steps = fresh
+	l.meta = meta
 }
 
 type CreateInput struct {
@@ -986,6 +1044,12 @@ func transcriptMarkdown(s model.Session, steps []model.Step) string {
 // attach makes sure the live session has an open ACP session in a running
 // process. It creates one for replicas that have never run on this device.
 func (l *live) attach() error {
+	l.attachMu.Lock()
+	defer l.attachMu.Unlock()
+	return l.attachLocked()
+}
+
+func (l *live) attachLocked() error {
 	l.mu.Lock()
 	if l.attached && l.proc != nil && l.proc.client.Alive() {
 		l.mu.Unlock()
@@ -1075,11 +1139,17 @@ func (l *live) attach() error {
 
 // reload replays the CLI's history for this session into the step cache.
 func (l *live) reload() error {
+	l.attachMu.Lock()
+	defer l.attachMu.Unlock()
+	return l.reloadLocked()
+}
+
+func (l *live) reloadLocked() error {
 	l.mu.Lock()
 	l.attached = false
 	l.steps = nil
 	l.mu.Unlock()
-	return l.attach()
+	return l.attachLocked()
 }
 
 func (l *live) resetCursor() {
@@ -1220,6 +1290,8 @@ func (l *live) runTurn(streamID, text string, attachments []model.Attachment) {
 	l.resetCursor()
 	seed := l.needsSeed
 	l.needsSeed = false
+	unseen := l.unseen
+	l.unseen = nil
 	steps := l.steps
 	p, id := l.proc, l.acpID
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1227,16 +1299,24 @@ func (l *live) runTurn(streamID, text string, attachments []model.Attachment) {
 	l.mu.Unlock()
 	l.emitChat(model.ChatEvent{Type: "step", Step: &user})
 
+	type resource = struct {
+		URI      string `json:"uri"`
+		MimeType string `json:"mimeType,omitempty"`
+		Text     string `json:"text,omitempty"`
+	}
 	var blocks []acp.ContentBlock
 	if seed {
 		// Replica resumed on a new device: give the CLI the prior transcript.
 		prior := steps[:len(steps)-1]
-		blocks = append(blocks, acp.ContentBlock{Type: "resource", Resource: &struct {
-			URI      string `json:"uri"`
-			MimeType string `json:"mimeType,omitempty"`
-			Text     string `json:"text,omitempty"`
-		}{URI: "anchor://session/" + l.meta.ID + "/history.md", MimeType: "text/markdown",
+		blocks = append(blocks, acp.ContentBlock{Type: "resource", Resource: &resource{
+			URI: "anchor://session/" + l.meta.ID + "/history.md", MimeType: "text/markdown",
 			Text: "The following is the earlier part of this conversation, synced from another device. Continue it naturally.\n\n" + transcriptMarkdown(l.meta.Session, prior)}})
+	} else if len(unseen) > 0 {
+		// The conversation went on from another device since this CLI
+		// session last ran: hand it the part it missed.
+		blocks = append(blocks, acp.ContentBlock{Type: "resource", Resource: &resource{
+			URI: "anchor://session/" + l.meta.ID + "/update.md", MimeType: "text/markdown",
+			Text: "The conversation continued on another device since your last turn. These messages were exchanged there; take them into account and continue naturally.\n\n" + transcriptMarkdown(l.meta.Session, unseen)}})
 	}
 	blocks = append(blocks, attachmentBlocks(attachments)...)
 	blocks = append(blocks, acp.ContentBlock{Type: "text", Text: text})
