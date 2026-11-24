@@ -86,6 +86,19 @@ export default function App() {
     return () => off?.();
   }, [loadSessions]);
 
+  // Drive sync rewrote a transcript (another device continued the chat):
+  // reload the open conversation unless a turn is streaming here.
+  useEffect(() => {
+    const off = window.runtime?.EventsOn('session:updated', async (raw: unknown) => {
+      const data = (raw ?? {}) as { sessionId?: string };
+      const { currentSessionId } = useSessionStore.getState();
+      if (data.sessionId && data.sessionId === currentSessionId && !useChatStore.getState().isStreaming) {
+        await useChatStore.getState().loadSteps(currentSessionId);
+      }
+    });
+    return () => off?.();
+  }, []);
+
   // Signing out must land on the sign-in screen rather than leave the shell
   // up with an empty account: the decision was only taken at bootstrap.
   useEffect(() => {

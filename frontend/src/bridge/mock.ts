@@ -1991,11 +1991,18 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
             to: l.version,
           }));
       },
-      async publish(skillId, input) {
-        const skill = skills.find((s) => s.id === skillId);
+      async plugins() {
+        return [
+          { name: 'firebase', displayName: 'Firebase', version: '1.0.3', description: 'Prototype, build & run modern apps with Firebase.', origin: 'marketplace', enabled: true },
+          { name: 'my-team-tools', displayName: 'My team tools', version: '0.1.0', description: 'Scripts and skills our team uses every day.', origin: 'local', enabled: true },
+        ];
+      },
+      async publish(kind, id, input) {
+        const skill = kind === 'skill' ? skills.find((s) => s.id === id) : undefined;
         const newListing: Listing = {
           id: createId('list'),
-          skillId,
+          kind,
+          skillId: kind === 'skill' ? id : undefined,
           name: input.name,
           tagline: input.tagline,
           description: input.description,
@@ -2125,6 +2132,14 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         syncStatus.pending = 0;
         notifySync();
         return { ...syncStatus };
+      },
+      async refresh(sessionId: string) {
+        syncStatus.lastSyncAt = new Date().toISOString();
+        notifySync();
+        const s = sessions.find((x) => x.id === sessionId);
+        if (!s) throw new Error('session not found');
+        s.lastSyncedAt = syncStatus.lastSyncAt;
+        return { ...s };
       },
       async conflicts() {
         return [...conflictsList];

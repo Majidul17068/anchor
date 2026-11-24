@@ -5,6 +5,8 @@ import { useSkillsStore } from '../../store/skills';
 import { AgentCard } from './AgentCard';
 import { AgentEditor } from './AgentEditor';
 import { AgentTestPanel } from './AgentTestPanel';
+import { PublishWizard } from '../market/PublishWizard';
+import { useMarketStore } from '../../store/market';
 import { Button } from '../../components/Button';
 import { Tabs } from '../../components/Tabs';
 import { PlanLock, useFeature } from '../../components/PlanGate';
@@ -26,16 +28,22 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
   const skills = useSkillsStore((s) => s.skills);
   const loadSkills = useSkillsStore((s) => s.loadSkills);
 
+  const plugins = useMarketStore((s) => s.plugins);
+  const loadPlugins = useMarketStore((s) => s.loadPlugins);
+
   const [filterSource, setFilterSource] = useState<string>('all');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [testAgent, setTestAgent] = useState<Agent | null>(null);
+  const [shareAgent, setShareAgent] = useState<Agent | null>(null);
   const { gate } = useFeature('agents');
+  const { gate: gatePublish } = useFeature('market_publish');
 
   useEffect(() => {
     loadAgents();
     loadSkills();
-  }, [loadAgents, loadSkills]);
+    loadPlugins();
+  }, [loadAgents, loadSkills, loadPlugins]);
 
   const filteredAgents = agents.filter((ag) => {
     if (filterSource === 'all') return true;
@@ -53,6 +61,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
   });
 
   const handleTest = gate((agent: Agent) => setTestAgent(agent));
+  const handleShare = gatePublish((agent: Agent) => setShareAgent(agent));
 
   const tabs = [
     { id: 'all', label: 'All Agents', count: agents.length },
@@ -99,6 +108,7 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
                 onSelect={() => selectAgent(ag.id)}
                 onEdit={() => handleEdit(ag)}
                 onTest={() => handleTest(ag)}
+                onShare={ag.source === 'mine' ? () => handleShare(ag) : undefined}
               />
             ))}
           </div>
@@ -110,6 +120,18 @@ export const AgentsPage: React.FC<AgentsPageProps> = () => {
         <AgentTestPanel
           agent={testAgent}
           onClose={() => setTestAgent(null)}
+        />
+      )}
+
+      {/* Share on the marketplace */}
+      {shareAgent && (
+        <PublishWizard
+          skills={skills}
+          agents={agents}
+          plugins={plugins}
+          initial={{ kind: 'agent', id: shareAgent.id }}
+          open={true}
+          onClose={() => setShareAgent(null)}
         />
       )}
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { Listing } from '../../bridge/types';
 import { useMarketStore } from '../../store/market';
 import { useSkillsStore } from '../../store/skills';
+import { useAgentsStore } from '../../store/agents';
 import { ListingCard } from './ListingCard';
 import { ListingDetail } from './ListingDetail';
 import { PublishWizard } from './PublishWizard';
@@ -33,6 +34,10 @@ export const MarketPage: React.FC = () => {
 
   const skills = useSkillsStore((s) => s.skills);
   const loadSkills = useSkillsStore((s) => s.loadSkills);
+  const agents = useAgentsStore((s) => s.agents);
+  const loadAgents = useAgentsStore((s) => s.loadAgents);
+  const plugins = useMarketStore((s) => s.plugins);
+  const loadPlugins = useMarketStore((s) => s.loadPlugins);
 
   const [selectedListingDetail, setSelectedListingDetail] = useState<Listing | null>(null);
   const [publishWizardOpen, setPublishWizardOpen] = useState(false);
@@ -41,7 +46,9 @@ export const MarketPage: React.FC = () => {
   useEffect(() => {
     loadCatalog();
     loadSkills();
-  }, [loadCatalog, loadSkills]);
+    loadAgents();
+    loadPlugins();
+  }, [loadCatalog, loadSkills, loadAgents, loadPlugins]);
 
   const categories = [
     'All',
@@ -83,7 +90,7 @@ export const MarketPage: React.FC = () => {
             icon={<Upload className="w-3.5 h-3.5" />}
             onClick={gatePublish(() => setPublishWizardOpen(true))}
           >
-            Publish a Skill
+            Publish
           </Button>
         </div>
       </div>
@@ -95,7 +102,7 @@ export const MarketPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex-1 min-w-[280px]">
                 <Input
-                  placeholder="Search 24+ published Antigravity skills, author names, tags..."
+                  placeholder="Search published skills, agents and plugins, author names, tags..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   icon={<Search className="w-4 h-4" />}
@@ -193,6 +200,8 @@ export const MarketPage: React.FC = () => {
       {publishWizardOpen && (
         <PublishWizard
           skills={skills}
+          agents={agents}
+          plugins={plugins}
           open={true}
           onClose={() => setPublishWizardOpen(false)}
         />

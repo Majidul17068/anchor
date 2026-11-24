@@ -217,8 +217,29 @@ type ChangelogEntry struct {
 	Notes   string `json:"notes"`
 }
 
+// ListingKind says what a marketplace listing contains.
+const (
+	ListingSkill  = "skill"
+	ListingAgent  = "agent"
+	ListingPlugin = "plugin"
+)
+
+// PluginInfo describes a plugin installed in the Antigravity CLI.
+type PluginInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Version     string `json:"version"`
+	Description string `json:"description"`
+	// Origin is "marketplace" (Google's plugin marketplace), "anchor" (the
+	// Anchor Marketplace) or "local" (installed from a folder or repo).
+	Origin  string `json:"origin"`
+	Enabled bool   `json:"enabled"`
+}
+
 type Listing struct {
-	ID               string           `json:"id"`
+	ID string `json:"id"`
+	// Kind is skill (default when empty), agent or plugin.
+	Kind             string           `json:"kind,omitempty"`
 	SkillID          string           `json:"skillId,omitempty"`
 	Name             string           `json:"name"`
 	Tagline          string           `json:"tagline"`

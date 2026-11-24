@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Listing, Notification, Review, SkillRequest } from '../bridge/types';
+import type { Listing, ListingKind, Notification, PluginInfo, Review, SkillRequest } from '../bridge/types';
 import { getBridge } from '../bridge';
 
 interface MarketState {
@@ -15,6 +15,8 @@ interface MarketState {
   notifications: Notification[];
   myListings: Listing[];
   updatesAvailable: { listingId: string; from: string; to: string }[];
+  /** Plugins installed in the CLI, for the publish wizard. */
+  plugins: PluginInfo[];
   loading: boolean;
   activeTab: 'catalog' | 'requests' | 'my-market';
 
@@ -29,8 +31,10 @@ interface MarketState {
   installListing: (id: string) => Promise<void>;
   uninstallListing: (id: string) => Promise<void>;
   checkUpdates: () => Promise<void>;
+  loadPlugins: () => Promise<void>;
   publishListing: (
-    skillId: string,
+    kind: ListingKind,
+    id: string,
     input: {
       name: string;
       tagline: string;
@@ -64,6 +68,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   notifications: [],
   myListings: [],
   updatesAvailable: [],
+  plugins: [],
   loading: false,
   activeTab: 'catalog',
 
@@ -140,9 +145,17 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     set({ updatesAvailable: updates });
   },
 
-  publishListing: async (skillId, input) => {
+  loadPlugins: async () => {
+    try {
+      set({ plugins: await getBridge().market.plugins() });
+    } catch {
+      set({ plugins: [] });
+    }
+  },
+
+  publishListing: async (kind, id, input) => {
     const bridge = getBridge();
-    const created = await bridge.market.publish(skillId, input);
+    const created = await bridge.market.publish(kind, id, input);
     await get().loadCatalog();
     return created;
   },

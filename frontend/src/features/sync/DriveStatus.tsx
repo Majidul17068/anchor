@@ -61,6 +61,13 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
                   : `Synchronizing sessions & skills directly with ${status?.driveEmail || 'your Google account'}`
                 : 'Connect your Google Drive: an Anchor folder is created in it and your sessions are saved there, filed by day.'}
             </p>
+            {status?.lastSyncAt && (
+              <p className="text-[11px] text-[var(--anchor-text-subtle)]">
+                Last synchronized {formatRelativeDate(status.lastSyncAt)}
+                {' · '}
+                {new Date(status.lastSyncAt).toLocaleString()}
+              </p>
+            )}
           </div>
         </div>
 

@@ -3,7 +3,7 @@ import type { Listing } from '../../bridge/types';
 import { Badge } from '../../components/Badge';
 import { Avatar } from '../../components/Avatar';
 import { formatNumberCompact } from '../../lib/format';
-import { Download, Sparkles, Star } from 'lucide-react';
+import { Bot, Download, Puzzle, Sparkles, Star } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 export interface ListingCardProps {
@@ -29,6 +29,12 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         {/* Top: Categories and Price Slot */}
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex flex-wrap gap-1">
+            {listing.kind && listing.kind !== 'skill' && (
+              <Badge variant="info" size="xs">
+                {listing.kind === 'agent' ? <Bot className="w-2.5 h-2.5 mr-0.5" /> : <Puzzle className="w-2.5 h-2.5 mr-0.5" />}
+                {listing.kind === 'agent' ? 'Agent' : 'Plugin'}
+              </Badge>
+            )}
             {listing.categories.slice(0, 2).map((cat) => (
               <Badge key={cat} variant="default" size="xs">
                 {cat}
@@ -93,7 +99,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           </div>
         ) : isInstalled ? (
           <div className="w-full py-0.5 text-center text-[var(--anchor-ok)] font-medium text-[10px]">
-            Installed in Mine → Acquired
+            {listing.kind === 'agent' ? 'Installed in your Agents' : listing.kind === 'plugin' ? 'Installed in the Antigravity CLI' : 'Installed in Mine → Acquired'}
           </div>
         ) : null}
       </div>

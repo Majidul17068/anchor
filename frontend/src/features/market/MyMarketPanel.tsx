@@ -32,7 +32,7 @@ export const MyMarketPanel: React.FC = () => {
 
         {myListings.length === 0 ? (
           <div className="p-6 rounded-xl border border-dashed border-[var(--anchor-border)] text-xs text-[var(--anchor-text-subtle)] text-center">
-            You haven&apos;t published any skills yet. Select any skill from &apos;Mine&apos; and click Publish.
+            You haven&apos;t published anything yet. Click Publish to share a skill, an agent or a plugin of yours.
           </div>
         ) : (
           <div className="space-y-3">
@@ -47,6 +47,9 @@ export const MyMarketPanel: React.FC = () => {
                       {l.name}
                     </span>
                     <Badge variant="accent" size="xs">v{l.version}</Badge>
+                    {l.kind && l.kind !== 'skill' && (
+                      <Badge variant="info" size="xs">{l.kind}</Badge>
+                    )}
                     <Badge variant={l.visibility === 'public' ? 'ok' : 'default'} size="xs">
                       {l.visibility}
                     </Badge>

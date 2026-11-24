@@ -23,6 +23,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Majidul17068/anchor/internal/agents"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/paths"
 	"github.com/Majidul17068/anchor/internal/skills"
@@ -48,21 +49,38 @@ type Index struct {
 type Service struct {
 	st      *store.Store
 	sk      *skills.Service
+	ag      *agents.Service
 	openURL func(string)
 	me      func() model.MarketAuthor
 	logf    func(string, ...any)
 	http    *http.Client
+	// plugin runs `agy plugin <args>`; nil when the CLI is not available.
+	plugin func(ctx context.Context, args ...string) (string, error)
 
 	mu        sync.Mutex
 	cached    *Index
 	fetchedAt time.Time
 }
 
-func New(st *store.Store, sk *skills.Service, openURL func(string), me func() model.MarketAuthor, logf func(string, ...any)) *Service {
+func New(st *store.Store, sk *skills.Service, ag *agents.Service, openURL func(string), me func() model.MarketAuthor, logf func(string, ...any)) *Service {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	return &Service{st: st, sk: sk, openURL: openURL, me: me, logf: logf, http: &http.Client{Timeout: 30 * time.Second}}
+	return &Service{st: st, sk: sk, ag: ag, openURL: openURL, me: me, logf: logf, http: &http.Client{Timeout: 30 * time.Second}}
+}
+
+// SetPluginRunner provides the CLI's plugin commands (install, uninstall).
+func (s *Service) SetPluginRunner(run func(ctx context.Context, args ...string) (string, error)) {
+	s.plugin = run
+}
+
+// kindOf normalises a listing's kind; older listings have none and are skills.
+func kindOf(l model.Listing) string {
+	switch l.Kind {
+	case model.ListingAgent, model.ListingPlugin:
+		return l.Kind
+	}
+	return model.ListingSkill
 }
 
 func (s *Service) indexURL() string {
@@ -145,11 +163,37 @@ func (s *Service) decorate(l model.Listing) model.Listing {
 	if l.Visibility == "" {
 		l.Visibility = "public"
 	}
-	if v, ok := s.sk.Installed()[l.ID]; ok {
-		l.InstalledVersion = v
-		l.SkillID = "skill_acquired_" + skills.Slug(l.Name)
+	l.Kind = kindOf(l)
+	switch l.Kind {
+	case model.ListingSkill:
+		if v, ok := s.sk.Installed()[l.ID]; ok {
+			l.InstalledVersion = v
+			l.SkillID = "skill_acquired_" + skills.Slug(l.Name)
+		}
+	default:
+		if v, ok := s.installed()[l.ID]; ok {
+			l.InstalledVersion = v
+		}
 	}
 	return l
+}
+
+// installed maps listing id -> version for agents and plugins installed
+// from the marketplace (skills keep that in their own metadata).
+func (s *Service) installed() map[string]string {
+	out := map[string]string{}
+	_ = s.st.ReadBlob(paths.MarketDir(), "installed", &out)
+	return out
+}
+
+func (s *Service) setInstalled(id, version string) error {
+	m := s.installed()
+	if version == "" {
+		delete(m, id)
+	} else {
+		m[id] = version
+	}
+	return s.st.WriteBlob(paths.MarketDir(), "installed", m)
 }
 
 type SearchOpts struct {
@@ -320,7 +364,10 @@ func (s *Service) open(u string) {
 	}
 }
 
-// Install downloads a listing's files and adds them to Mine → Acquired.
+// Install downloads a listing's files and installs them by kind: a skill
+// goes to Mine → Acquired, an agent to the user's agents (the CLI lists it
+// at once), a plugin through `agy plugin install`. The returned skill is
+// nil for agents and plugins.
 func (s *Service) Install(ctx context.Context, id string) (*model.Skill, error) {
 	l, err := s.Get(ctx, id)
 	if err != nil {
@@ -336,7 +383,154 @@ func (s *Service) Install(ctx context.Context, id string) (*model.Skill, error) 
 	if len(files) == 0 {
 		return nil, errors.New("this listing has no files to install")
 	}
+	switch kindOf(l) {
+	case model.ListingAgent:
+		if s.ag == nil {
+			return nil, errors.New("agents are not available")
+		}
+		var f *model.SkillFile
+		for i := range files {
+			if strings.HasSuffix(files[i].Path, ".md") {
+				f = &files[i]
+				break
+			}
+		}
+		if f == nil {
+			return nil, errors.New("this agent listing has no agent file")
+		}
+		if _, err := s.ag.InstallFile(skills.Slug(l.Name)+".md", f.Content); err != nil {
+			return nil, err
+		}
+		return nil, s.setInstalled(l.ID, l.Version)
+	case model.ListingPlugin:
+		if s.plugin == nil {
+			return nil, errors.New("the Antigravity CLI (agy) is not installed")
+		}
+		dir, err := os.MkdirTemp("", "anchor-plugin-")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(dir)
+		root := filepath.Join(dir, skills.Slug(l.Name))
+		for _, f := range files {
+			p := filepath.Join(root, filepath.FromSlash(f.Path))
+			if !strings.HasPrefix(p, root) {
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				return nil, err
+			}
+			if err := os.WriteFile(p, []byte(f.Content), 0o644); err != nil {
+				return nil, err
+			}
+		}
+		if _, err := os.Stat(filepath.Join(root, "plugin.json")); err != nil {
+			return nil, errors.New("this plugin listing has no plugin.json")
+		}
+		if out, err := s.plugin(ctx, "install", root); err != nil {
+			return nil, fmt.Errorf("agy plugin install: %v\n%s", err, strings.TrimSpace(out))
+		}
+		return nil, s.setInstalled(l.ID, l.Version)
+	}
 	return s.sk.Install(l.Name, "acquired", l.Author.Name, l.Version, files, l.Examples, l.ID)
+}
+
+// Plugins lists the plugins installed in the CLI, for sharing.
+func (s *Service) Plugins() []model.PluginInfo {
+	out := []model.PluginInfo{}
+	entries, _ := os.ReadDir(paths.PluginsDir())
+	var cfg struct {
+		Plugins map[string]struct {
+			Enabled       *bool `json:"enabled"`
+			InstalledFrom *struct {
+				Marketplace string `json:"marketplace"`
+			} `json:"installedFrom"`
+		} `json:"plugins"`
+	}
+	_ = s.st.ReadBlob(paths.ConfigDir(), "config", &cfg)
+	anchorInstalled := map[string]bool{}
+	for id := range s.installed() {
+		if i := strings.LastIndex(id, "/"); i >= 0 {
+			anchorInstalled[id[i+1:]] = true
+		}
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		var man struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+			Version     string `json:"version"`
+			Description string `json:"description"`
+		}
+		b, err := os.ReadFile(filepath.Join(paths.PluginsDir(), e.Name(), "plugin.json"))
+		if err != nil || json.Unmarshal(b, &man) != nil {
+			continue
+		}
+		p := model.PluginInfo{Name: e.Name(), DisplayName: man.DisplayName, Version: man.Version, Description: man.Description, Origin: "local", Enabled: true}
+		if p.DisplayName == "" {
+			p.DisplayName = man.Name
+		}
+		if p.DisplayName == "" {
+			p.DisplayName = e.Name()
+		}
+		if c, ok := cfg.Plugins[e.Name()]; ok {
+			if c.Enabled != nil {
+				p.Enabled = *c.Enabled
+			}
+			if c.InstalledFrom != nil && c.InstalledFrom.Marketplace != "" {
+				p.Origin = "marketplace"
+			}
+		}
+		if anchorInstalled[skills.Slug(e.Name())] {
+			p.Origin = "anchor"
+		}
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DisplayName < out[j].DisplayName })
+	return out
+}
+
+// pluginFiles collects a plugin folder's text files for a listing.
+func pluginFiles(name string) ([]model.SkillFile, error) {
+	root := filepath.Join(paths.PluginsDir(), name)
+	if _, err := os.Stat(filepath.Join(root, "plugin.json")); err != nil {
+		return nil, errors.New("plugin not found: " + name)
+	}
+	var files []model.SkillFile
+	var total int64
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "node_modules", "__pycache__", ".venv":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() > 1<<20 {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil || !utf8.Valid(b) {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, p)
+		total += info.Size()
+		if total > 20<<20 {
+			return errors.New("plugin is larger than 20 MB; share it from a repository instead")
+		}
+		files = append(files, model.SkillFile{Path: filepath.ToSlash(rel), Content: string(b)})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 func (s *Service) downloadBundle(ctx context.Context, u string) ([]model.SkillFile, error) {
@@ -386,7 +580,30 @@ func (s *Service) downloadBundle(ctx context.Context, u string) ([]model.SkillFi
 	return files, nil
 }
 
-func (s *Service) Uninstall(id string) error { return s.sk.Uninstall(id) }
+func (s *Service) Uninstall(id string) error {
+	if v, ok := s.installed()[id]; ok && v != "" {
+		l, err := s.Get(context.Background(), id)
+		if err != nil {
+			return err
+		}
+		switch kindOf(l) {
+		case model.ListingAgent:
+			if s.ag != nil {
+				if err := s.ag.Delete("mine:" + skills.Slug(l.Name)); err != nil {
+					return err
+				}
+			}
+		case model.ListingPlugin:
+			if s.plugin != nil {
+				if out, err := s.plugin(context.Background(), "uninstall", skills.Slug(l.Name)); err != nil {
+					return fmt.Errorf("agy plugin uninstall: %v\n%s", err, strings.TrimSpace(out))
+				}
+			}
+		}
+		return s.setInstalled(id, "")
+	}
+	return s.sk.Uninstall(id)
+}
 
 func (s *Service) CheckUpdates(ctx context.Context) ([]model.UpdateAvailable, error) {
 	idx, err := s.Index(ctx, true)
@@ -394,6 +611,9 @@ func (s *Service) CheckUpdates(ctx context.Context) ([]model.UpdateAvailable, er
 		return []model.UpdateAvailable{}, err
 	}
 	installed := s.sk.Installed()
+	for id, v := range s.installed() {
+		installed[id] = v
+	}
 	var out []model.UpdateAvailable
 	for _, l := range idx.Listings {
 		if v, ok := installed[l.ID]; ok && v != "" && l.Version != "" && l.Version != v {
@@ -429,30 +649,76 @@ func (s *Service) saveLocalListings(list []model.Listing) error {
 	return s.st.WriteBlob(paths.MarketDir(), "my-listings", list)
 }
 
-func (s *Service) Publish(ctx context.Context, skillID string, in PublishInput) (model.Listing, error) {
-	sk, err := s.sk.Get(skillID)
-	if err != nil {
-		return model.Listing{}, err
-	}
+// Publish submits one of the user's skills, agents or plugins to the Anchor
+// Marketplace. kind is skill, agent or plugin; id is the skill id, the
+// agent id ("mine:<name>") or the plugin folder name.
+func (s *Service) Publish(ctx context.Context, kind, id string, in PublishInput) (model.Listing, error) {
 	if len(strings.TrimSpace(in.Description)) < 40 {
 		return model.Listing{}, errors.New("description must be at least 40 characters")
 	}
-	if findSecret(sk.Files) {
+	if strings.TrimSpace(in.Name) == "" {
+		return model.Listing{}, errors.New("the listing needs a name")
+	}
+	var (
+		files    []model.SkillFile
+		examples []model.SkillExample
+		version  = "1.0.0"
+		skillID  string
+		trained  bool
+	)
+	switch kind {
+	case "", model.ListingSkill:
+		kind = model.ListingSkill
+		sk, err := s.sk.Get(id)
+		if err != nil {
+			return model.Listing{}, err
+		}
+		files, examples, version, skillID = sk.Files, sk.Examples, sk.Version, sk.ID
+		for _, ex := range sk.Examples {
+			if ex.LastResult != nil && ex.LastResult.Pass {
+				trained = true
+			}
+		}
+	case model.ListingAgent:
+		if s.ag == nil {
+			return model.Listing{}, errors.New("agents are not available")
+		}
+		name, content, err := s.ag.Export(id)
+		if err != nil {
+			return model.Listing{}, err
+		}
+		files = []model.SkillFile{{Path: name, Content: content}}
+	case model.ListingPlugin:
+		var err error
+		if files, err = pluginFiles(id); err != nil {
+			return model.Listing{}, err
+		}
+		for _, f := range files {
+			if f.Path == "plugin.json" {
+				var man struct {
+					Version string `json:"version"`
+				}
+				if json.Unmarshal([]byte(f.Content), &man) == nil && man.Version != "" {
+					version = man.Version
+				}
+			}
+		}
+	default:
+		return model.Listing{}, fmt.Errorf("unknown listing kind %q", kind)
+	}
+	if findSecret(files) {
 		return model.Listing{}, errors.New("a file looks like it contains a secret (API key or token); remove it before publishing")
 	}
 	me := s.me()
 	slug := skills.Slug(in.Name)
-	id := me.ID + "/" + slug
+	lid := me.ID + "/" + slug
 	now := store.Now()
-	trained := false
-	for _, ex := range sk.Examples {
-		if ex.LastResult != nil && ex.LastResult.Pass {
-			trained = true
-		}
+	if examples == nil {
+		examples = []model.SkillExample{}
 	}
-	listing := model.Listing{ID: id, SkillID: sk.ID, Name: in.Name, Tagline: in.Tagline, Description: in.Description, Version: sk.Version,
-		Author: me, Categories: in.Categories, Trained: trained, Visibility: in.Visibility, License: in.License, Files: sk.Files,
-		Examples: sk.Examples, Changelog: []model.ChangelogEntry{{Version: sk.Version, At: now, Notes: "Initial submission"}}, PublishedAt: now, UpdatedAt: now}
+	listing := model.Listing{ID: lid, Kind: kind, SkillID: skillID, Name: in.Name, Tagline: in.Tagline, Description: in.Description, Version: version,
+		Author: me, Categories: in.Categories, Trained: trained, Visibility: in.Visibility, License: in.License, Files: files,
+		Examples: examples, Changelog: []model.ChangelogEntry{{Version: version, At: now, Notes: "Initial submission"}}, PublishedAt: now, UpdatedAt: now}
 	if listing.Categories == nil {
 		listing.Categories = []string{}
 	}
@@ -460,7 +726,7 @@ func (s *Service) Publish(ctx context.Context, skillID string, in PublishInput) 
 		listing.Visibility = "public"
 	}
 
-	// Write the submission bundle: listing.json + skill.zip.
+	// Write the submission bundle: listing.json + <slug>.zip.
 	dir := filepath.Join(paths.MarketDir(), "submissions", slug)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return model.Listing{}, err
@@ -471,7 +737,7 @@ func (s *Service) Publish(ctx context.Context, skillID string, in PublishInput) 
 	}
 	var zb bytes.Buffer
 	zw := zip.NewWriter(&zb)
-	for _, f := range sk.Files {
+	for _, f := range files {
 		w, err := zw.Create(slug + "/" + f.Path)
 		if err == nil {
 			_, _ = w.Write([]byte(f.Content))
@@ -486,7 +752,7 @@ func (s *Service) Publish(ctx context.Context, skillID string, in PublishInput) 
 	list := s.localListings()
 	replaced := false
 	for i := range list {
-		if list[i].ID == id {
+		if list[i].ID == lid {
 			list[i] = listing
 			replaced = true
 		}
@@ -497,9 +763,9 @@ func (s *Service) Publish(ctx context.Context, skillID string, in PublishInput) 
 	if err := s.saveLocalListings(list); err != nil {
 		return model.Listing{}, err
 	}
-	body := fmt.Sprintf("Skill submission from Anchor.\n\n- Name: %s\n- Tagline: %s\n- Version: %s\n- Categories: %s\n- License: %s\n- Visibility: %s\n\n%s\n\nAttach the files from this folder to this issue:\n`%s`\n(listing.json and %s.zip)",
-		in.Name, in.Tagline, sk.Version, strings.Join(listing.Categories, ", "), in.License, listing.Visibility, in.Description, dir, slug)
-	s.open(s.issueURL("[skill] "+in.Name, body, "submission"))
+	body := fmt.Sprintf("%s submission from Anchor.\n\n- Kind: %s\n- Name: %s\n- Tagline: %s\n- Version: %s\n- Categories: %s\n- License: %s\n- Visibility: %s\n\n%s\n\nAttach the files from this folder to this issue:\n`%s`\n(listing.json and %s.zip)",
+		strings.ToUpper(kind[:1])+kind[1:], kind, in.Name, in.Tagline, version, strings.Join(listing.Categories, ", "), in.License, listing.Visibility, in.Description, dir, slug)
+	s.open(s.issueURL("["+kind+"] "+in.Name, body, "submission"))
 	s.openFolder(dir)
 	return s.decorate(listing), nil
 }

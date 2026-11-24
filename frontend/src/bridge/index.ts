@@ -8,10 +8,12 @@ import type {
   Effort,
   GitHubImport,
   Listing,
+  ListingKind,
   Mode,
   Model,
   Notification,
   Platform,
+  PluginInfo,
   Project,
   RemoteSession,
   Review,
@@ -131,8 +133,12 @@ export interface AnchorBridge {
     install(id: string): Promise<Skill>; // copies into Mine -> Acquired
     uninstall(id: string): Promise<void>;
     checkUpdates(): Promise<{ listingId: string; from: string; to: string }[]>;
+    /** Plugins installed in the CLI that can be shared. */
+    plugins(): Promise<PluginInfo[]>;
+    /** Publish a skill, an agent or a plugin of yours; id is the skill id, agent id or plugin name. */
     publish(
-      skillId: string,
+      kind: ListingKind,
+      id: string,
       input: {
         name: string;
         tagline: string;
@@ -169,6 +175,8 @@ export interface AnchorBridge {
     openDriveClient?(): Promise<void>;
     disconnectDrive(): Promise<void>;
     syncNow(): Promise<SyncStatus>;
+    /** Pull latest: exchange one session with Drive now, both directions; returns the session afterwards. */
+    refresh(sessionId: string): Promise<Session>;
     conflicts(): Promise<Conflict[]>;
     resolveConflict(sessionId: string, as: 'parent' | 'merged'): Promise<void>;
     /** Sessions on Drive from other devices, not yet pulled here. */

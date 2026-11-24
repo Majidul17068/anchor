@@ -101,7 +101,20 @@ func NewAPI(version string, logger *log.Logger) *API {
 		}
 		return model.MarketAuthor{ID: "anonymous", Name: "Anonymous"}
 	}
-	a.market = market.New(st, a.skills, a.openURL, me, logf)
+	a.market = market.New(st, a.skills, a.agents, a.openURL, me, logf)
+	a.market.SetPluginRunner(func(ctx context.Context, args ...string) (string, error) {
+		bin, ok := a.loc.Find()
+		if !ok {
+			return "", errors.New("the Antigravity CLI (agy) is not installed")
+		}
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer cancel()
+		out, err := cli.Run(ctx, bin, append([]string{"plugin"}, args...)...)
+		if err == nil {
+			a.eng.Shutdown() // so the CLI re-discovers plugins, agents and skills
+		}
+		return out, err
+	})
 	return a
 }
 
@@ -647,11 +660,16 @@ func (a *API) MarketCheckUpdates() ([]model.UpdateAvailable, error) {
 	defer cancel()
 	return a.market.CheckUpdates(ctx)
 }
-func (a *API) MarketPublish(skillID string, in market.PublishInput) (model.Listing, error) {
+
+// MarketPublish submits a skill, agent or plugin; see market.Publish.
+func (a *API) MarketPublish(kind, id string, in market.PublishInput) (model.Listing, error) {
 	ctx, cancel := a.ctxShort()
 	defer cancel()
-	return a.market.Publish(ctx, skillID, in)
+	return a.market.Publish(ctx, kind, id, in)
 }
+
+// MarketPlugins lists the plugins installed in the CLI, for sharing.
+func (a *API) MarketPlugins() []model.PluginInfo { return a.market.Plugins() }
 func (a *API) MarketUnpublish(id string) error {
 	ctx, cancel := a.ctxShort()
 	defer cancel()

@@ -52,6 +52,8 @@ export interface Session {
   createdAt: string;
   lastModified: string;
   pinned: boolean;
+  /** When this device last exchanged the session with Drive. */
+  lastSyncedAt?: string;
 }
 
 export interface Attachment {
@@ -96,6 +98,8 @@ export interface Agent {
   tools: string[];
   skillIds: string[];
   mcpServers: string[];
+  /** False when the file exists but the Antigravity CLI does not list it (so Test cannot run it). */
+  discovered?: boolean;
 }
 
 export interface SkillFile {
@@ -155,8 +159,23 @@ export interface MarketAuthor {
   avatarUrl?: string;
 }
 
+export type ListingKind = 'skill' | 'agent' | 'plugin';
+
+/** A plugin installed in the Antigravity CLI, as shown in the publish wizard. */
+export interface PluginInfo {
+  name: string;
+  displayName: string;
+  version: string;
+  description: string;
+  /** Where it came from: "marketplace", "local" or "anchor" (installed from the Anchor Marketplace). */
+  origin: string;
+  enabled: boolean;
+}
+
 export interface Listing {
   id: string;
+  /** What the listing contains; missing means skill. */
+  kind?: ListingKind;
   skillId?: string; // skillId set when installed locally
   name: string;
   tagline: string;

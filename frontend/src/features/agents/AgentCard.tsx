@@ -2,7 +2,7 @@ import React from 'react';
 import type { Agent } from '../../bridge/types';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
-import { Bot, Cpu, Layers, Play, Settings } from 'lucide-react';
+import { AlertTriangle, Bot, Cpu, Layers, Play, Settings, Upload } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 export interface AgentCardProps {
@@ -11,6 +11,8 @@ export interface AgentCardProps {
   onSelect: () => void;
   onEdit: () => void;
   onTest: () => void;
+  /** Share this agent on the Anchor Marketplace (your own agents only). */
+  onShare?: () => void;
 }
 
 export const AgentCard: React.FC<AgentCardProps> = ({
@@ -19,7 +21,9 @@ export const AgentCard: React.FC<AgentCardProps> = ({
   onSelect,
   onEdit,
   onTest,
+  onShare,
 }) => {
+  const hidden = agent.discovered === false;
   const sourceColors = {
     builtin: 'default',
     plugin: 'accent',
@@ -52,6 +56,14 @@ export const AgentCard: React.FC<AgentCardProps> = ({
               </Badge>
             </div>
           </div>
+          {hidden && (
+            <span title="The Antigravity CLI does not list this agent, so Test cannot run it. Open Configure and save it again to rewrite the file.">
+              <Badge variant="warn" size="xs">
+                <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />
+                Not seen by CLI
+              </Badge>
+            </span>
+          )}
         </div>
 
         <p className="text-xs text-[var(--anchor-text-muted)] line-clamp-2 leading-relaxed mb-4">
@@ -72,6 +84,19 @@ export const AgentCard: React.FC<AgentCardProps> = ({
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">
+          {onShare && agent.source === 'mine' && (
+            <Button
+              size="xs"
+              variant="ghost"
+              icon={<Upload className="w-3.5 h-3.5" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+            >
+              Share
+            </Button>
+          )}
           <Button
             size="xs"
             variant="outline"

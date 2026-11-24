@@ -25,6 +25,8 @@ interface SyncState {
   useFolder: (path: string) => Promise<void>;
   loadAvailable: () => Promise<void>;
   pullSession: (sessionId: string) => Promise<Session | null>;
+  /** Pull latest for one session: both directions, right now. */
+  refreshSession: (sessionId: string) => Promise<Session | null>;
   syncNow: () => Promise<void>;
   connectDrive: () => Promise<void>;
   disconnectDrive: () => Promise<void>;
@@ -160,6 +162,20 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       const bridge = getBridge();
       const s = await bridge.sync.pull(sessionId);
       set((state) => ({ available: state.available.filter((r) => r.id !== sessionId), pulling: null }));
+      return s;
+    } catch (e) {
+      set({ pulling: null, error: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
+  },
+
+  refreshSession: async (sessionId: string) => {
+    set({ pulling: sessionId, error: null });
+    try {
+      const bridge = getBridge();
+      const s = await bridge.sync.refresh(sessionId);
+      const status = await bridge.sync.status();
+      set({ status, pulling: null });
       return s;
     } catch (e) {
       set({ pulling: null, error: e instanceof Error ? e.message : String(e) });

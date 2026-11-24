@@ -266,6 +266,49 @@ func (s *Service) Save(in SaveInput) (*model.Agent, error) {
 	return fromFile(path, "mine", "mine:"+name)
 }
 
+// Export returns one of the user's agents as the file the CLI reads, for
+// sharing: the file name and its content. Anchor-only fields (model,
+// effort, skills) travel with it under the anchor: key.
+func (s *Service) Export(id string) (name, content string, err error) {
+	if !strings.HasPrefix(id, "mine:") {
+		return "", "", errors.New("only your own agents can be shared; copy a plugin or built-in agent first")
+	}
+	name = strings.TrimPrefix(id, "mine:")
+	b, err := os.ReadFile(filepath.Join(paths.UserAgentsDir(), name+".md"))
+	if err != nil {
+		return "", "", errors.New("agent not found: " + id)
+	}
+	fm, body := parse(string(b))
+	if fm.Name == "" {
+		fm.Name = name
+	}
+	fm.CommandExecutionPolicy = ""
+	return name + ".md", render(fm, body), nil
+}
+
+// InstallFile adds an agent file obtained from the marketplace to the
+// user's agents, so the CLI lists it like one they wrote. The file name
+// wins over any name inside, so two listings cannot overwrite each other.
+func (s *Service) InstallFile(fileName, content string) (*model.Agent, error) {
+	name := skills.Slug(strings.TrimSuffix(filepath.Base(fileName), ".md"))
+	if name == "" {
+		return nil, errors.New("agent file has no name")
+	}
+	fm, body := parse(content)
+	if fm.Name == "" || !policyAccepted(fm.CommandExecutionPolicy) {
+		fm.CommandExecutionPolicy = ""
+	}
+	fm.Name = name
+	if err := os.MkdirAll(paths.UserAgentsDir(), 0o755); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(paths.UserAgentsDir(), name+".md")
+	if err := os.WriteFile(path, []byte(render(fm, body)), 0o644); err != nil {
+		return nil, err
+	}
+	return fromFile(path, "mine", "mine:"+name)
+}
+
 func (s *Service) Delete(id string) error {
 	if !strings.HasPrefix(id, "mine:") {
 		return errors.New("only your own agents can be deleted")

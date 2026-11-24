@@ -40,6 +40,10 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
 
   const isInstalled = Boolean(listing.installedVersion);
   const hasUpdate = isInstalled && listing.installedVersion !== listing.version;
+  const kind = listing.kind ?? 'skill';
+  const kindLabel = kind === 'agent' ? 'Agent' : kind === 'plugin' ? 'Plugin' : 'Skill';
+  const installLabel =
+    kind === 'agent' ? 'Add to My Agents' : kind === 'plugin' ? 'Install Plugin' : 'Add to My Skills';
 
   const handleInstallToggle = async () => {
     setInstalling(true);
@@ -80,6 +84,9 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
                   {listing.name}
                 </h2>
                 <Badge variant="accent" size="xs">v{listing.version}</Badge>
+                {kind !== 'skill' && (
+                  <Badge variant="info" size="xs">{kindLabel}</Badge>
+                )}
                 {listing.trained && (
                   <Badge variant="ok" size="xs">
                     <Sparkles className="w-3 h-3 mr-0.5 text-amber-400" />
@@ -121,7 +128,7 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
               }
               onClick={handleInstallToggle}
             >
-              {hasUpdate ? 'Update Skill' : isInstalled ? 'Installed (Remove)' : 'Add to My Skills'}
+              {hasUpdate ? `Update ${kindLabel}` : isInstalled ? 'Installed (Remove)' : installLabel}
             </Button>
             <button
               onClick={onClose}
@@ -149,7 +156,7 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
             <div className="space-y-6 max-w-3xl">
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--anchor-text-subtle)] mb-2">
-                  About this Skill
+                  About this {kindLabel}
                 </h4>
                 <MarkdownView content={listing.description} />
               </div>
@@ -200,7 +207,7 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
           {activeTab === 'files' && (
             <div className="space-y-4 max-w-3xl">
               <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--anchor-text-subtle)]">
-                SKILL.md & Included Reference Assets
+                {kind === 'agent' ? 'Agent definition file' : kind === 'plugin' ? 'Plugin files' : 'SKILL.md & Included Reference Assets'}
               </h4>
               {listing.files.map((file) => (
                 <div key={file.path} className="space-y-1">
