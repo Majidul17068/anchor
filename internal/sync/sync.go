@@ -245,6 +245,53 @@ func (e *Engine) Conflicts() []model.Conflict {
 	return out
 }
 
+// ResetLinks cuts every tie to the Drive that was connected until now. It
+// is called when the Drive account changes or is disconnected: file ids,
+// versions and conflicts belong to one Drive and would be wrong in another.
+//
+//   - Sessions this device created keep their Sync switch when keepSyncing
+//     is true, and are saved afresh to whichever Drive is connected next;
+//     with keepSyncing false they become local only.
+//   - Copies pulled from other devices stay on this device as plain local
+//     copies; they can be pulled again from a Drive that has them.
+//
+// Nothing is deleted, here or in the old Drive.
+func (e *Engine) ResetLinks(keepSyncing bool) {
+	e.runMu.Lock()
+	defer e.runMu.Unlock()
+	me := e.st.Device().ID
+	for _, m := range e.st.ListSessions() {
+		wasLinked := m.DriveFileID != "" || m.RemoteVersion != 0 || m.SyncState != model.SyncLocal || m.SyncEnabled
+		if !wasLinked {
+			continue
+		}
+		m.DriveFileID, m.RemoteVersion, m.LastSyncedAt = "", 0, ""
+		if m.OriginDeviceID == me {
+			if m.SyncEnabled && keepSyncing {
+				m.SyncState = model.SyncPublished
+				if m.LocalVersion == 0 {
+					m.LocalVersion = 1
+				}
+			} else {
+				m.SyncEnabled, m.SyncState = false, model.SyncLocal
+			}
+		} else {
+			m.SyncEnabled, m.SyncState, m.Unpublished = false, model.SyncLocal, true
+		}
+		_ = e.st.SaveSession(m)
+	}
+	e.mu.Lock()
+	e.confl = map[string]model.Conflict{}
+	e.saveConflicts()
+	e.status.LastSyncAt, e.status.UsageBytes = "", 0
+	e.mu.Unlock()
+	e.saveState()
+	if e.emit != nil {
+		e.emit("sessions:changed", map[string]any{"source": "sync"})
+		e.emit("sync:status", e.Status())
+	}
+}
+
 func (e *Engine) saveConflicts() {
 	_ = e.st.WriteBlob(paths.AnchorDir(), "conflicts", e.confl)
 }

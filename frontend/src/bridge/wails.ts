@@ -258,6 +258,8 @@ export function createWailsBridge(): AnchorBridge {
       useFolder: (path) => call<SyncStatus>('SyncUseFolder', path),
       openDriveClient: () => call('SyncOpenDriveClient'),
       disconnectDrive: () => call('SyncDisconnectDrive'),
+      canChooseAccount: () => call<boolean>('SyncCanChooseAccount').then(Boolean),
+      changeAccount: (keepSyncing) => call<SyncStatus>('SyncChangeAccount', keepSyncing),
       syncNow: () => call<SyncStatus>('SyncNow'),
       refresh: (sessionId) => call<Session>('SyncRefresh', sessionId),
       conflicts: () => call<Conflict[]>('SyncConflicts').then((c) => c ?? []),

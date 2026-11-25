@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { SyncStatus } from '../../bridge/types';
 import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
@@ -6,7 +6,8 @@ import { formatBytes, formatRelativeDate } from '../../lib/format';
 import { PlanLock, useFeature } from '../../components/PlanGate';
 import { useSyncStore } from '../../store/sync';
 import { DriveHelp, folderKindLabel } from './DriveHelp';
-import { Cloud, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { confirmDialog } from '../../store/confirm';
 
 export interface DriveStatusProps {
   status: SyncStatus | null;
@@ -26,6 +27,43 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
   const isConnected = Boolean(status?.driveConnected);
   const { gate: gateSync } = useFeature('drive_sync');
   const error = useSyncStore((s) => s.error);
+  const changeAccount = useSyncStore((s) => s.changeAccount);
+  const canChoose = useSyncStore((s) => s.canChooseAccount);
+  const [changing, setChanging] = useState(false);
+
+  // Google's account chooser opens in the browser; the current connection
+  // stays as it is until a new account has been chosen there.
+  const runChange = async () => {
+    setChanging(true);
+    await changeAccount(true);
+    setChanging(false);
+  };
+
+  const handleChange = async () => {
+    const ok = await confirmDialog({
+      title: 'Use a different Google account?',
+      message:
+        `Your browser opens so you can choose the account. ` +
+        `Sessions with Sync on are then saved to that account's Drive, and what Anchor learned moves with them. ` +
+        `Copies you pulled from other devices stay on this computer. ` +
+        `Nothing is deleted from ${status?.driveEmail || 'the current Drive'}; cancel in the browser and nothing changes.`,
+      confirmLabel: 'Choose account',
+    });
+    if (ok) await runChange();
+  };
+
+  const handleDisconnect = async () => {
+    const ok = await confirmDialog({
+      title: 'Disconnect Google Drive?',
+      message:
+        `Anchor signs out of ${status?.driveEmail || 'this Drive'} and gives up its access to it. ` +
+        `Your sessions stay on this computer, and the files already in the Drive stay there. ` +
+        `You can connect the same account or another one afterwards.`,
+      confirmLabel: 'Disconnect',
+      danger: true,
+    });
+    if (ok) onDisconnect();
+  };
   // A folder was chosen earlier but Drive for Desktop is not serving it now.
   const unhealthy = status?.folderPath && status.health && status.health !== 'ok' ? `${status.health}: ${status.healthMessage ?? ''}` : null;
 
@@ -83,11 +121,12 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
               >
                 Sync Now
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onDisconnect}
-              >
+              {canChoose && (
+                <Button variant="outline" size="sm" loading={changing} icon={<UserRoundCog className="w-3.5 h-3.5" />} onClick={handleChange}>
+                  Change account
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={handleDisconnect}>
                 Disconnect
               </Button>
             </>
@@ -97,6 +136,7 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
               <Button
                 variant="primary"
                 size="sm"
+                loading={isSyncing && !changing}
                 icon={<Cloud className="w-3.5 h-3.5" />}
                 onClick={gateSync(onConnect)}
               >
@@ -106,6 +146,31 @@ export const DriveStatus: React.FC<DriveStatusProps> = ({
           )}
         </div>
       </div>
+
+      {/* Which account, and how to pick another */}
+      {isConnected ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 rounded-lg bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-xs">
+          <span className="text-[var(--anchor-text-subtle)]">Account</span>
+          <span className="font-mono font-medium text-[var(--anchor-text)] selectable">{status?.driveEmail || 'unknown'}</span>
+          <span className="text-[var(--anchor-text-subtle)]">
+            · {status?.backend === 'folder' ? `through ${folderKindLabel(status.folderKind)} on this computer` : 'signed in through the browser'}
+          </span>
+        </div>
+      ) : (
+        canChoose && (
+          <p className="text-[11px] text-[var(--anchor-text-subtle)]">
+            Connect picks Google Drive for Desktop when it is running on this computer.{' '}
+            <button
+              onClick={gateSync(() => void runChange())}
+              disabled={changing}
+              className="text-[var(--anchor-accent)] hover:underline cursor-pointer disabled:opacity-50"
+            >
+              {changing ? 'Waiting for the browser…' : 'Sign in with a Google account of your choice instead'}
+            </button>
+            .
+          </p>
+        )
+      )}
 
       {error ? <DriveHelp error={error} onRetry={onConnect} /> : unhealthy ? <DriveHelp error={unhealthy} onRetry={onConnect} /> : null}
 

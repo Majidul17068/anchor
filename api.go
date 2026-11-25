@@ -253,15 +253,11 @@ func (a *API) AuthLogin() (*model.Account, error) {
 // different person signing in next must not inherit the previous Drive.
 func (a *API) AuthLogout() error {
 	err := a.eng.Logout()
-	if a.drive.Connected() {
-		if derr := a.drive.Disconnect(); derr != nil && err == nil {
+	// The next person to sign in must not inherit this account's Drive.
+	if a.drive.Connected() || a.folder.Root() != "" {
+		if derr := a.SyncDisconnectDrive(); derr != nil && err == nil {
 			err = derr
 		}
-	}
-	if a.folder.Root() != "" {
-		a.folder.SetRoot("")
-		_ = a.st.SetSettings(map[string]any{"syncFolder": ""})
-		a.sync.SetDrive(a.drive, "api", "", "")
 	}
 	a.emit("sync:status", a.SyncStatus())
 	return err
@@ -771,17 +767,7 @@ func (a *API) SyncConnectDrive() (model.SyncStatus, error) {
 	if a.drive.Configured() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		if _, err := a.drive.Connect(ctx); err != nil {
-			return a.sync.Status(), err
-		}
-		// The visible Anchor folder exists from the first connect, so the
-		// user sees where their sessions will go before anything is published.
-		if _, err := a.drive.RootFolder(ctx); err != nil {
-			a.log.Printf("drive: create Anchor folder: %v", err)
-		}
-		a.sync.SetDrive(a.drive, "api", "", "")
-		go func() { _, _ = a.sync.SyncNow(context.Background()) }()
-		return a.sync.Status(), nil
+		return a.connectAccount(ctx, true)
 	}
 	msg := "DRIVE_NOT_FOUND: Google Drive for Desktop is not installed on this computer. Install it from https://www.google.com/drive/download/ and sign in, then click Connect again"
 	if len(cands) > 0 {
@@ -837,10 +823,82 @@ func (a *API) useFolder(path string) (model.SyncStatus, error) {
 		return a.sync.Status(), err
 	}
 	a.sync.SetDrive(a.folder, "folder", path, folderdrive.KindOf(path))
+	a.driveChanged("folder:"+path+"|"+a.folder.Email(), true)
 	a.emit("sync:status", a.sync.Status())
 	go func() { _, _ = a.sync.SyncNow(context.Background()) }()
 	return a.sync.Status(), nil
 }
+
+// ---------------------------------------------------------------------------
+// which Google Drive: connect, change account, disconnect
+// ---------------------------------------------------------------------------
+
+// driveChanged records which Drive is connected now. When it is not the one
+// used before (another Google account, another folder), everything that
+// pointed into the old Drive is cut loose so sessions are saved afresh to
+// the new one instead of looking for files that are not there.
+func (a *API) driveChanged(identity string, keepSyncing bool) {
+	prev := a.st.SettingString("driveIdentity")
+	if prev == identity {
+		return
+	}
+	if prev != "" {
+		a.sync.ResetLinks(keepSyncing)
+		a.learn.ResetDrive()
+	}
+	_ = a.st.SetSettings(map[string]any{"driveIdentity": identity})
+	a.kickKnowledgeSync()
+}
+
+// connectAccount runs Google's sign-in in the browser, where the user
+// chooses the account, and makes that account's Drive the one Anchor uses.
+// The connection in place stays untouched until the new one succeeds, so
+// cancelling in the browser changes nothing.
+func (a *API) connectAccount(ctx context.Context, keepSyncing bool) (model.SyncStatus, error) {
+	oldGrant := a.drive.RefreshToken()
+	oldEmail := a.drive.Email()
+	email, err := a.drive.Connect(ctx)
+	if err != nil {
+		return a.SyncStatus(), err
+	}
+	// A synced folder, if one was in use, gives way to the chosen account.
+	if a.folder.Root() != "" {
+		a.folder.SetRoot("")
+		_ = a.st.SetSettings(map[string]any{"syncFolder": ""})
+	}
+	a.sync.SetDrive(a.drive, "api", "", "")
+	a.driveChanged("api:"+email, keepSyncing)
+	// The previous account no longer needs to list Anchor as having access.
+	if oldGrant != "" && oldEmail != email {
+		go a.drive.RevokeGrant(context.Background(), oldGrant)
+	}
+	// The visible Anchor folder exists from the first connect, so the user
+	// sees where their sessions will go before anything is published.
+	if _, err := a.drive.RootFolder(ctx); err != nil {
+		a.log.Printf("drive: create Anchor folder: %v", err)
+	}
+	a.emit("sync:status", a.SyncStatus())
+	go func() { _, _ = a.sync.SyncNow(context.Background()) }()
+	return a.SyncStatus(), nil
+}
+
+// SyncChangeAccount signs in to Google Drive with an account the user picks
+// in the browser, replacing whichever Drive was connected (an account, or a
+// Drive for Desktop folder). With keepSyncing, sessions that have Sync on
+// are saved to the new account; otherwise they become local only. Nothing
+// is deleted from the previous Drive.
+func (a *API) SyncChangeAccount(keepSyncing bool) (model.SyncStatus, error) {
+	if !a.drive.Configured() {
+		return a.SyncStatus(), errors.New("DRIVE_NOT_CONFIGURED: this build cannot sign in to Google Drive directly; use a Google Drive for Desktop folder instead")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	return a.connectAccount(ctx, keepSyncing)
+}
+
+// SyncCanChooseAccount reports whether signing in with a chosen Google
+// account is available in this build.
+func (a *API) SyncCanChooseAccount() bool { return a.drive.Configured() }
 
 // SyncAvailable lists sessions other devices published to Drive that this
 // device has not pulled.
@@ -871,16 +929,25 @@ func (a *API) SyncRefresh(sessionID string) (model.Session, error) {
 	return s, err
 }
 
+// SyncDisconnectDrive removes the Drive connection completely: the synced
+// folder is forgotten, the Google account is signed out and Anchor's access
+// to it withdrawn at Google, and sessions stop pointing into that Drive (a
+// Drive connected later, the same or another, gets them afresh). Files
+// already in the Drive are left where they are.
 func (a *API) SyncDisconnectDrive() error {
 	var err error
-	if a.folder.Connected() {
+	if a.folder.Root() != "" {
 		a.folder.SetRoot("")
 		err = a.st.SetSettings(map[string]any{"syncFolder": ""})
-		a.sync.SetDrive(a.drive, "api", "", "")
-	} else {
-		err = a.drive.Disconnect()
 	}
-	a.emit("sync:status", a.sync.Status())
+	if derr := a.drive.Disconnect(); derr != nil && err == nil {
+		err = derr
+	}
+	a.sync.SetDrive(a.drive, "api", "", "")
+	a.sync.ResetLinks(true)
+	a.learn.ResetDrive()
+	_ = a.st.SetSettings(map[string]any{"driveIdentity": ""})
+	a.emit("sync:status", a.SyncStatus())
 	return err
 }
 

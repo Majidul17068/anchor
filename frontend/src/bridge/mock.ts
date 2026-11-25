@@ -2170,6 +2170,14 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         };
         notifySync();
       },
+      async canChooseAccount() {
+        return true;
+      },
+      async changeAccount() {
+        syncStatus = { driveConnected: true, driveEmail: 'another.account@gmail.com', backend: 'api', pending: 0, conflicts: 0, usageBytes: 0 };
+        notifySync();
+        return { ...syncStatus };
+      },
       async syncNow() {
         syncStatus.lastSyncAt = new Date().toISOString();
         syncStatus.pending = 0;

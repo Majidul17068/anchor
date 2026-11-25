@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -146,10 +147,57 @@ func (s *Service) Email() string {
 	return t.Email
 }
 
-func (s *Service) Disconnect() error {
+// reset drops everything remembered about the account in this process: the
+// API client and the folder ids, which belong to one Google account and
+// would point into the wrong Drive after a change of account.
+func (s *Service) reset() {
 	s.mu.Lock()
 	s.client = nil
+	s.folders = nil
 	s.mu.Unlock()
+}
+
+// RefreshToken returns the stored grant, so the caller can revoke it after
+// a successful change of account.
+func (s *Service) RefreshToken() string {
+	t, err := s.loadToken()
+	if err != nil {
+		return ""
+	}
+	if t.RefreshToken != "" {
+		return t.RefreshToken
+	}
+	return t.AccessToken
+}
+
+// RevokeGrant withdraws a grant at Google, so the account no longer lists
+// Anchor as having access. Best effort: being offline must not block
+// signing out.
+func (s *Service) RevokeGrant(ctx context.Context, token string) {
+	if token == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/revoke",
+		strings.NewReader(url.Values{"token": {token}}.Encode()))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.logf("drive: revoke: %v", err)
+		return
+	}
+	resp.Body.Close()
+}
+
+// Disconnect forgets the account on this device and withdraws Anchor's
+// access to it at Google. Files already in that Drive are left alone.
+func (s *Service) Disconnect() error {
+	s.RevokeGrant(context.Background(), s.RefreshToken())
+	s.reset()
 	err := os.Remove(s.tokenPath())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -204,10 +252,15 @@ func (s *Service) Connect(ctx context.Context) (string, error) {
 	go func() { _ = srv.Serve(ln) }()
 	defer srv.Close()
 
-	url := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce,
+	// select_account: Google always shows its account chooser, so the user
+	// picks which account's Drive to use instead of silently getting the
+	// one the browser happens to be signed in to. consent: a refresh token
+	// is issued every time.
+	authURL := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline,
+		oauth2.SetAuthURLParam("prompt", "select_account consent"),
 		oauth2.SetAuthURLParam("code_challenge", challenge), oauth2.SetAuthURLParam("code_challenge_method", "S256"))
 	if s.openURL != nil {
-		s.openURL(url)
+		s.openURL(authURL)
 	}
 	var code string
 	select {
@@ -224,12 +277,12 @@ func (s *Service) Connect(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("token exchange failed: %w", err)
 	}
 	email := s.fetchEmail(ctx, cfg, tok)
+	// Only now does the previous account's token give way: cancelling the
+	// browser step leaves the existing connection untouched.
 	if err := s.saveToken(&savedToken{Token: *tok, Email: email}); err != nil {
 		return "", err
 	}
-	s.mu.Lock()
-	s.client = nil
-	s.mu.Unlock()
+	s.reset()
 	return email, nil
 }
 

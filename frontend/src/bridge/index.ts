@@ -186,6 +186,13 @@ export interface AnchorBridge {
     /** Launch Google Drive for Desktop when its folder is not responding (desktop shell only). */
     openDriveClient?(): Promise<void>;
     disconnectDrive(): Promise<void>;
+    /** Whether signing in to Drive with a chosen Google account is available in this build. */
+    canChooseAccount(): Promise<boolean>;
+    /**
+     * Sign in to Drive with an account picked in the browser, replacing the current connection.
+     * With keepSyncing, sessions that have Sync on are saved to the new account.
+     */
+    changeAccount(keepSyncing: boolean): Promise<SyncStatus>;
     syncNow(): Promise<SyncStatus>;
     /** Pull latest: exchange one session with Drive now, both directions; returns the session afterwards. */
     refresh(sessionId: string): Promise<Session>;

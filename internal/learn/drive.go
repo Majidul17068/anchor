@@ -177,6 +177,17 @@ func (s *Service) materialise(st *state) {
 	}
 }
 
+// ResetDrive forgets which Drive file the knowledge base was exchanged
+// with, for when the Drive account changes: the next exchange starts
+// fresh against the new account and merges with whatever it holds.
+func (s *Service) ResetDrive() {
+	s.driveMu.Lock()
+	defer s.driveMu.Unlock()
+	st := s.load()
+	st.DriveFileID, st.DriveModified, st.DriveFingerprint, st.DriveSyncedAt = "", "", "", ""
+	_ = s.save(st)
+}
+
 // SyncDrive exchanges the knowledge base with Google Drive: it folds in
 // what other devices learned or decided, applies it here, and uploads the
 // result when Drive is behind. It is safe to call often; with nothing new

@@ -30,6 +30,10 @@ interface SyncState {
   syncNow: () => Promise<void>;
   connectDrive: () => Promise<void>;
   disconnectDrive: () => Promise<void>;
+  /** Whether signing in with a chosen Google account is available in this build. */
+  canChooseAccount: boolean;
+  /** Sign in to Drive with an account picked in the browser, replacing the current connection. */
+  changeAccount: (keepSyncing: boolean) => Promise<void>;
   resolveConflict: (sessionId: string, as: 'parent' | 'merged') => Promise<void>;
   renameDevice: (name: string) => Promise<void>;
 }
@@ -45,11 +49,27 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   available: [],
   pulling: null,
   candidates: [],
+  canChooseAccount: false,
+
+  changeAccount: async (keepSyncing) => {
+    set({ error: null });
+    try {
+      const st = await getBridge().sync.changeAccount(keepSyncing);
+      set({ status: st });
+      await get().loadSyncState();
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) });
+    }
+  },
 
   loadSyncState: async () => {
     try {
       set({ loading: true });
       const bridge = getBridge();
+      bridge.sync
+        .canChooseAccount()
+        .then((v) => set({ canChooseAccount: v }))
+        .catch(() => {});
       const [st, devs, thisDev, confl] = await Promise.all([
         bridge.sync.status(),
         bridge.devices.list(),
