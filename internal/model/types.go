@@ -78,6 +78,41 @@ type Session struct {
 	// LastSyncedAt is when this device last exchanged this session with
 	// Drive (uploaded it, or refreshed it from the parent's copy).
 	LastSyncedAt string `json:"lastSyncedAt,omitempty"`
+	// ContextUsed / ContextSize: tokens in the model's context window for
+	// this conversation and the window's size, as last reported by the CLI.
+	ContextUsed int64 `json:"contextUsed,omitempty"`
+	ContextSize int64 `json:"contextSize,omitempty"`
+}
+
+// Usage is the signed-in account's model limits as the CLI reports them.
+type Usage struct {
+	Tier        string        `json:"tier,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Groups      []UsageGroup  `json:"groups"`
+	Credits     *UsageCredits `json:"credits,omitempty"`
+	FetchedAt   string        `json:"fetchedAt"`
+}
+
+// UsageGroup is a set of models sharing limits ("Gemini Models").
+type UsageGroup struct {
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	Buckets     []UsageBucket `json:"buckets"`
+}
+
+// UsageBucket is one limit: Window is "weekly" or "5h".
+type UsageBucket struct {
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	Description       string  `json:"description,omitempty"`
+	Window            string  `json:"window"`
+	RemainingFraction float64 `json:"remainingFraction"`
+	ResetTime         string  `json:"resetTime,omitempty"`
+}
+
+type UsageCredits struct {
+	Remaining  float64 `json:"remaining"`
+	UpgradeURI string  `json:"upgradeUri,omitempty"`
 }
 
 type Attachment struct {
@@ -269,6 +304,10 @@ type Review struct {
 	Rating    int          `json:"rating"`
 	Text      string       `json:"text"`
 	At        string       `json:"at"`
+	// Mine marks the signed-in user's own review; Pending means it is saved
+	// on this device and submitted, but not yet in the public index.
+	Mine    bool `json:"mine,omitempty"`
+	Pending bool `json:"pending,omitempty"`
 }
 
 type RequestReply struct {

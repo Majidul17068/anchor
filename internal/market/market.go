@@ -175,7 +175,37 @@ func (s *Service) decorate(l model.Listing) model.Listing {
 			l.InstalledVersion = v
 		}
 	}
+	// The user's own rating counts at once, before the public index has it.
+	if mine, ok := s.myReviews()[l.ID]; ok && !s.inIndex(l.ID, mine.Author.ID) {
+		total := l.Rating*float64(l.RatingCount) + float64(mine.Rating)
+		l.RatingCount++
+		l.Rating = total / float64(l.RatingCount)
+	}
 	return l
+}
+
+// myReviews are the reviews this user wrote, by listing id. They live on
+// this device so a rating shows immediately; the same review is submitted
+// to the marketplace repository and replaces the local copy once merged.
+func (s *Service) myReviews() map[string]model.Review {
+	out := map[string]model.Review{}
+	_ = s.st.ReadBlob(paths.MarketDir(), "my-reviews", &out)
+	return out
+}
+
+// inIndex reports whether the public index already has a review of this
+// listing by this author.
+func (s *Service) inIndex(listingID, authorID string) bool {
+	idx := s.cachedIndex()
+	if idx == nil || idx.Reviews == nil {
+		return false
+	}
+	for _, r := range idx.Reviews[listingID] {
+		if r.Author.ID == authorID && authorID != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // installed maps listing id -> version for agents and plugins installed
@@ -326,26 +356,66 @@ func (s *Service) Get(ctx context.Context, id string) (model.Listing, error) {
 	return model.Listing{}, errors.New("listing not found")
 }
 
+// Reviews returns the public reviews of a listing plus the signed-in user's
+// own review when the index does not carry it yet (marked pending), newest
+// first with the user's own on top.
 func (s *Service) Reviews(ctx context.Context, id string) ([]model.Review, error) {
+	out := []model.Review{}
+	me := s.me()
 	idx, _ := s.Index(ctx, false)
+	mineInIndex := false
 	if idx != nil && idx.Reviews != nil {
-		if r, ok := idx.Reviews[id]; ok && r != nil {
-			return r, nil
+		for _, r := range idx.Reviews[id] {
+			if r.Author.ID == me.ID && me.ID != "" {
+				r.Mine = true
+				mineInIndex = true
+			}
+			out = append(out, r)
 		}
 	}
-	return []model.Review{}, nil
+	if mine, ok := s.myReviews()[id]; ok && !mineInIndex {
+		mine.Mine, mine.Pending = true, true
+		out = append(out, mine)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Mine != out[j].Mine {
+			return out[i].Mine
+		}
+		return out[i].At > out[j].At
+	})
+	return out, nil
 }
 
-// Review opens the listing's discussion thread on GitHub; reviews are
-// moderated there and folded into the index.
+// Review records the user's rating of a listing. It is saved on this device
+// (so the stars and the review show at once, and a second review replaces
+// the first) and submitted to the marketplace repository as a prefilled
+// issue, where it is folded into the public index for everyone else.
 func (s *Service) Review(ctx context.Context, id string, rating int, text string) (model.Review, error) {
+	if rating < 1 || rating > 5 {
+		return model.Review{}, errors.New("rating must be between 1 and 5 stars")
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return model.Review{}, errors.New("write a few words about your experience")
+	}
 	l, err := s.Get(ctx, id)
 	if err != nil {
 		return model.Review{}, err
 	}
+	me := s.me()
+	if me.ID == l.Author.ID && me.ID != "" && me.ID != "anonymous" {
+		return model.Review{}, errors.New("you cannot review your own listing")
+	}
+	rev := model.Review{ID: "mine-" + skills.Slug(id), ListingID: id, Author: me, Rating: rating, Text: text, At: store.Now()}
+	all := s.myReviews()
+	all[id] = rev
+	if err := s.st.WriteBlob(paths.MarketDir(), "my-reviews", all); err != nil {
+		return model.Review{}, err
+	}
 	title := fmt.Sprintf("[review] %s — %d/5", l.Name, rating)
 	s.open(s.issueURL(title, fmt.Sprintf("Listing: %s\nRating: %d/5\n\n%s", l.ID, rating, text), "review"))
-	return model.Review{ID: "pending", ListingID: id, Author: s.me(), Rating: rating, Text: text, At: store.Now()}, nil
+	rev.Mine, rev.Pending = true, true
+	return rev, nil
 }
 
 func (s *Service) issueURL(title, body, label string) string {

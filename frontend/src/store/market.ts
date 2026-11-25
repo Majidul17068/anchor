@@ -175,7 +175,9 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   addReview: async (listingId, rating, text) => {
     const bridge = getBridge();
     await bridge.market.review(listingId, rating, text);
-    await get().loadReviews(listingId);
+    // The rating changed: refresh the open listing, its reviews and the cards.
+    await get().selectListing(listingId);
+    await get().loadCatalog();
   },
 
   loadRequests: async () => {

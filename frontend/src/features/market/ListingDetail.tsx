@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Listing } from '../../bridge/types';
 import { useMarketStore } from '../../store/market';
 import { Button } from '../../components/Button';
@@ -25,18 +25,36 @@ export interface ListingDetailProps {
   onClose: () => void;
 }
 
-export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }) => {
+export const ListingDetail: React.FC<ListingDetailProps> = ({ listing: opened, onClose }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'files' | 'reviews' | 'changelog'>('overview');
   const [installing, setInstalling] = useState(false);
   const [newReviewText, setNewReviewText] = useState('');
   const [newReviewRating, setNewReviewRating] = useState(5);
   const [reported, setReported] = useState(false);
   const [updateRequested, setUpdateRequested] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSent, setReviewSent] = useState(false);
 
   const installListing = useMarketStore((s) => s.installListing);
   const uninstallListing = useMarketStore((s) => s.uninstallListing);
-  const reviews = useMarketStore((s) => s.reviews);
   const addReview = useMarketStore((s) => s.addReview);
+  // The store's copy is live (rating, install state); the prop is what was
+  // clicked and covers the moment before the store has loaded it.
+  const active = useMarketStore((s) => s.activeListing);
+  const listing = active && active.id === opened.id ? active : opened;
+  const allReviews = useMarketStore((s) => s.reviews);
+  const reviews = allReviews.filter((r) => r.listingId === listing.id || !r.listingId);
+  const myReview = reviews.find((r) => r.mine);
+
+  // Editing an earlier review starts from it.
+  useEffect(() => {
+    if (myReview) {
+      setNewReviewRating(myReview.rating);
+      setNewReviewText(myReview.text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myReview?.id, myReview?.at]);
 
   const isInstalled = Boolean(listing.installedVersion);
   const hasUpdate = isInstalled && listing.installedVersion !== listing.version;
@@ -59,9 +77,18 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
   };
 
   const handlePostReview = async () => {
-    if (!newReviewText.trim()) return;
-    await addReview(listing.id, newReviewRating, newReviewText.trim());
-    setNewReviewText('');
+    if (!newReviewText.trim() || posting) return;
+    setPosting(true);
+    setReviewError(null);
+    setReviewSent(false);
+    try {
+      await addReview(listing.id, newReviewRating, newReviewText.trim());
+      setReviewSent(true);
+    } catch (e) {
+      setReviewError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPosting(false);
+    }
   };
 
   const tabs = [
@@ -225,18 +252,23 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
               {/* Write review */}
               <div className="p-4 bg-[var(--anchor-surface)] border border-[var(--anchor-border)] rounded-xl space-y-3">
                 <span className="text-xs font-semibold text-[var(--anchor-text)] block">
-                  Write a Community Review
+                  {myReview ? 'Update Your Review' : 'Write a Community Review'}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" role="radiogroup" aria-label="Rating">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
+                      type="button"
+                      role="radio"
+                      aria-checked={star === newReviewRating}
+                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
                       onClick={() => setNewReviewRating(star)}
                       className={`p-1 cursor-pointer ${star <= newReviewRating ? 'text-amber-400' : 'text-gray-600'}`}
                     >
                       <Star className="w-4 h-4 fill-current" />
                     </button>
                   ))}
+                  <span className="pl-2 text-[11px] font-mono text-[var(--anchor-text-subtle)]">{newReviewRating} / 5</span>
                 </div>
                 <textarea
                   value={newReviewText}
@@ -245,9 +277,18 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
                   rows={2}
                   className="w-full bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] rounded-lg p-2.5 text-xs text-[var(--anchor-text)] focus:outline-none"
                 />
-                <Button size="xs" variant="primary" disabled={!newReviewText.trim()} onClick={handlePostReview}>
-                  Submit Review
+                <Button size="xs" variant="primary" loading={posting} disabled={!newReviewText.trim()} onClick={handlePostReview}>
+                  {myReview ? 'Update Review' : 'Submit Review'}
                 </Button>
+                {reviewError && (
+                  <p className="text-[11px] text-[var(--anchor-danger)]">{reviewError}</p>
+                )}
+                {reviewSent && !reviewError && (
+                  <p className="text-[11px] text-[var(--anchor-text-muted)]">
+                    Saved. Your rating counts here right away. A GitHub page opened with the review filled in:
+                    press <strong>Submit new issue</strong> there so everyone else sees it too.
+                  </p>
+                )}
               </div>
 
               {/* Reviews list */}
@@ -261,6 +302,12 @@ export const ListingDetail: React.FC<ListingDetailProps> = ({ listing, onClose }
                       <div className="flex items-center gap-2">
                         <Avatar name={rev.author.name} src={rev.author.avatarUrl} size="xs" />
                         <span className="font-semibold text-[var(--anchor-text)]">{rev.author.name}</span>
+                        {rev.mine && <Badge variant="accent" size="xs">You</Badge>}
+                        {rev.pending && (
+                          <span title="Saved on this device and submitted; it appears for everyone once it is added to the public catalog.">
+                            <Badge variant="warn" size="xs">Awaiting publication</Badge>
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 text-amber-400 font-mono text-[11px]">
                         <Star className="w-3 h-3 fill-current" />

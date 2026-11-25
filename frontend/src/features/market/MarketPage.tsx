@@ -43,6 +43,13 @@ export const MarketPage: React.FC = () => {
   const [publishWizardOpen, setPublishWizardOpen] = useState(false);
   const { gate: gatePublish } = useFeature('market_publish');
 
+  // Opening a listing also loads it, and its reviews, into the store: the
+  // detail view reads from there so ratings and install state stay live.
+  const openListing = (l: Listing) => {
+    setSelectedListingDetail(l);
+    void selectListing(l.id);
+  };
+
   useEffect(() => {
     loadCatalog();
     loadSkills();
@@ -159,7 +166,7 @@ export const MarketPage: React.FC = () => {
                   <ListingCard
                     key={`feat-${l.id}`}
                     listing={l}
-                    onSelect={() => setSelectedListingDetail(l)}
+                    onSelect={() => openListing(l)}
                   />
                 ))}
               </div>
@@ -176,7 +183,7 @@ export const MarketPage: React.FC = () => {
                 <ListingCard
                   key={l.id}
                   listing={l}
-                  onSelect={() => setSelectedListingDetail(l)}
+                  onSelect={() => openListing(l)}
                 />
               ))}
             </div>
