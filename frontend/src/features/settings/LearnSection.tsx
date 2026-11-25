@@ -12,7 +12,7 @@ import { Button } from '../../components/Button';
 import { SuggestionCard } from '../learn/SuggestionCard';
 import { PublishWizard } from '../market/PublishWizard';
 import { formatRelativeDate } from '../../lib/format';
-import { GraduationCap, Sparkles } from 'lucide-react';
+import { Cloud, CloudOff, GraduationCap, Sparkles } from 'lucide-react';
 
 /**
  * "Learn from my work". Off until the user switches it on. When on, Anchor
@@ -116,6 +116,29 @@ export const LearnSection: React.FC = () => {
             <Button variant="primary" size="sm" loading={running} icon={<Sparkles className="w-3.5 h-3.5" />} onClick={() => run()}>
               Learn now
             </Button>
+          </div>
+
+          {/* Where the knowledge lives */}
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-[11px] text-[var(--anchor-text-muted)]">
+            {status?.driveConnected ? (
+              <>
+                <Cloud className="w-3.5 h-3.5 mt-0.5 text-[var(--anchor-ok)] shrink-0" />
+                <span>
+                  Kept in your Google Drive as <span className="font-mono text-[var(--anchor-text)]">Anchor/Anchor knowledge.json</span> and
+                  shared with your other devices automatically: suggestions, your decisions, your standing instructions, and the
+                  skills and agents you approved.
+                  {status.driveSyncedAt ? ` Last exchanged ${formatRelativeDate(status.driveSyncedAt).toLowerCase()}.` : ' First exchange is about to run.'}
+                </span>
+              </>
+            ) : (
+              <>
+                <CloudOff className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Kept on this device only. Connect Google Drive on the Sync page and what Anchor learns follows you to your other
+                  devices automatically.
+                </span>
+              </>
+            )}
           </div>
 
           {error && <div className="p-2.5 rounded-lg bg-[var(--anchor-danger)]/10 text-[11px] text-[var(--anchor-danger)]">{error}</div>}

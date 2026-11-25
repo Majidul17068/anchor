@@ -55,6 +55,9 @@ type Hooks struct {
 	SaveAgent func(name, description, instructions string, tools []string) (string, error)
 	// Existing lists what the user already has, so it is not proposed again.
 	Existing func() (skills, agents []string)
+	// SetRulesAt installs instructions another device wrote, keeping the
+	// time they were changed there (Drive sync).
+	SetRulesAt func(text, at string) error
 }
 
 type state struct {
@@ -64,6 +67,16 @@ type state struct {
 	// StudiedUntil is the newest user message the last run saw; an automatic
 	// run is skipped when nothing newer exists.
 	StudiedUntil string `json:"studiedUntil,omitempty"`
+
+	// Drive sync (drive.go). Applied: approved skills and agents already
+	// created on this device, so each is created once. ForgottenAt: the
+	// user erased everything learned up to then, on every device.
+	Applied          map[string]bool `json:"applied,omitempty"`
+	ForgottenAt      string          `json:"forgottenAt,omitempty"`
+	DriveFileID      string          `json:"driveFileId,omitempty"`
+	DriveModified    string          `json:"driveModified,omitempty"`
+	DriveFingerprint string          `json:"driveFingerprint,omitempty"`
+	DriveSyncedAt    string          `json:"driveSyncedAt,omitempty"`
 }
 
 type Service struct {
@@ -75,6 +88,7 @@ type Service struct {
 
 	mu      sync.Mutex
 	running bool
+	driveMu sync.Mutex
 }
 
 func New(st *store.Store, run Runner, hooks Hooks, emit func(string, any), logf func(string, ...any)) *Service {
@@ -112,7 +126,7 @@ func (s *Service) Status() model.LearnStatus {
 	s.mu.Lock()
 	running := s.running
 	s.mu.Unlock()
-	out := model.LearnStatus{Enabled: s.Enabled(), Running: running, LastRunAt: st.LastRunAt, LastError: st.LastError}
+	out := model.LearnStatus{Enabled: s.Enabled(), Running: running, LastRunAt: st.LastRunAt, LastError: st.LastError, DriveSyncedAt: st.DriveSyncedAt}
 	for _, sg := range st.Suggestions {
 		if sg.Status == model.SuggestionDraft {
 			out.Drafts++
@@ -586,6 +600,10 @@ func (s *Service) Accept(id string, e Edit) (model.Suggestion, error) {
 		sg.CreatedID = created
 	}
 	sg.Status, sg.DecidedAt = model.SuggestionAccepted, store.Now()
+	if st.Applied == nil {
+		st.Applied = map[string]bool{}
+	}
+	st.Applied[sg.ID] = true // created here; Drive sync must not create it again
 	out := *sg
 	if err := s.save(st); err != nil {
 		return out, err
@@ -613,7 +631,10 @@ func (s *Service) Reject(id string) error {
 
 // Forget erases everything learned: drafts, decisions and run history.
 func (s *Service) Forget() error {
-	if err := s.save(state{Suggestions: []model.Suggestion{}}); err != nil {
+	// ForgottenAt reaches the other devices through Drive, so what was
+	// erased here does not come back from them.
+	old := s.load()
+	if err := s.save(state{Suggestions: []model.Suggestion{}, ForgottenAt: store.Now(), DriveFileID: old.DriveFileID}); err != nil {
 		return err
 	}
 	s.emit("learn:status", s.Status())

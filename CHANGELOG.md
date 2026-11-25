@@ -11,6 +11,14 @@
   agents are yours and can be shared on the Marketplace from the same card.
   Studies run on demand or at most once a day; `anchorctl learn` does the
   same from the terminal.
+- What Anchor learns follows you. With Google Drive connected, one file at
+  the top of your Anchor folder (`Anchor knowledge.json`, beside the dated
+  session folders) carries the suggestions, your decisions, your standing
+  instructions and the skills and agents you approved. Every device pulls
+  and pushes it in the background: a draft found on one device can be
+  approved on another, an approved skill is created on each device once, a
+  dismissal sticks everywhere, and instructions follow the device that
+  changed them last.
 - Replies render as real Markdown: tables, rules, nested and numbered
   lists, checklists.
 - Paste or drop images and files into the composer; pictures show as

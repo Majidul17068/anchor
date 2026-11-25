@@ -22,6 +22,13 @@ func (a *API) newLearn(logf func(string, ...any)) *learn.Service {
 		SetRules: func(text string) error {
 			return a.SettingsSet(map[string]any{"agentRules": text})
 		},
+		SetRulesAt: func(text, at string) error {
+			if err := a.SettingsSet(map[string]any{"agentRules": text, "agentRulesAt": at}); err != nil {
+				return err
+			}
+			a.emit("settings:changed", map[string]any{"source": "drive"})
+			return nil
+		},
 		SaveSkill: func(name, description, body string) (string, error) {
 			slug := skills.Slug(name)
 			md := "---\nname: " + slug + "\ndescription: " + oneLine(description) + "\n---\n\n" + strings.TrimSpace(body) + "\n"
@@ -86,7 +93,61 @@ func (a *API) learnLoop() {
 	}
 }
 
-func (a *API) LearnStatus() model.LearnStatus { return a.learn.Status() }
+// knowledgeStore is where the knowledge base lives: the same Drive the
+// sessions go to (a synced folder when one is chosen, else the Drive API).
+func (a *API) knowledgeStore() learn.Store {
+	if a.folder.Connected() {
+		return a.folder
+	}
+	if a.drive.Connected() {
+		return a.drive
+	}
+	return nil
+}
+
+// kickKnowledgeSync asks for an exchange with Drive soon (after a decision,
+// a study, or a change to the instructions). It never blocks.
+func (a *API) kickKnowledgeSync() {
+	select {
+	case a.knowledgeKick <- struct{}{}:
+	default:
+	}
+}
+
+// knowledgeLoop keeps what Anchor learned the same on every device: it
+// exchanges the knowledge base with Drive every two minutes and right after
+// anything changes here. Only while learning is switched on.
+func (a *API) knowledgeLoop() {
+	t := time.NewTicker(2 * time.Minute)
+	defer t.Stop()
+	first := time.After(20 * time.Second)
+	for {
+		select {
+		case <-first:
+		case <-t.C:
+		case <-a.knowledgeKick:
+			time.Sleep(2 * time.Second) // let a burst of changes settle
+		}
+		if !a.learn.Enabled() {
+			continue
+		}
+		d := a.knowledgeStore()
+		if d == nil {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if err := a.learn.SyncDrive(ctx, d); err != nil {
+			a.log.Printf("learn: drive sync: %v", err)
+		}
+		cancel()
+	}
+}
+
+func (a *API) LearnStatus() model.LearnStatus {
+	st := a.learn.Status()
+	st.DriveConnected = a.knowledgeStore() != nil
+	return st
+}
 
 func (a *API) LearnSuggestions() []model.Suggestion { return a.learn.List() }
 
@@ -98,19 +159,29 @@ func (a *API) LearnRun() (int, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
+	defer a.kickKnowledgeSync()
 	return a.learn.Run(ctx, true)
 }
 
 func (a *API) LearnUpdate(id string, e learn.Edit) (model.Suggestion, error) {
+	defer a.kickKnowledgeSync()
 	return a.learn.Update(id, e)
 }
 
 // LearnAccept puts a draft into effect, with the user's last edits.
 func (a *API) LearnAccept(id string, e learn.Edit) (model.Suggestion, error) {
+	defer a.kickKnowledgeSync()
 	return a.learn.Accept(id, e)
 }
 
-func (a *API) LearnReject(id string) error { return a.learn.Reject(id) }
+func (a *API) LearnReject(id string) error {
+	defer a.kickKnowledgeSync()
+	return a.learn.Reject(id)
+}
 
-// LearnForget erases all drafts, decisions and run history.
-func (a *API) LearnForget() error { return a.learn.Forget() }
+// LearnForget erases all drafts, decisions and run history, here and (via
+// Drive) on the user's other devices.
+func (a *API) LearnForget() error {
+	defer a.kickKnowledgeSync()
+	return a.learn.Forget()
+}

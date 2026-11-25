@@ -113,9 +113,16 @@ export default function App() {
     void useLearnStore.getState().load();
     const off = window.runtime?.EventsOn('learn:status', (raw: unknown) => {
       useLearnStore.getState().setStatus(raw as LearnStatus);
+      // New drafts or decisions may have arrived from another device.
+      void useLearnStore.getState().load();
     });
-    return () => off?.();
-  }, [account]);
+    // Standing instructions changed on another device and arrived via Drive.
+    const offSettings = window.runtime?.EventsOn('settings:changed', () => void loadSettings());
+    return () => {
+      off?.();
+      offSettings?.();
+    };
+  }, [account, loadSettings]);
 
   // The CLI reports how full the context window is as a chat goes on.
   useEffect(() => {

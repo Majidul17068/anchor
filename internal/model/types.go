@@ -127,6 +127,10 @@ type LearnStatus struct {
 	Drafts    int    `json:"drafts"`
 	LastRunAt string `json:"lastRunAt,omitempty"`
 	LastError string `json:"lastError,omitempty"`
+	// DriveConnected: the knowledge base is kept on Google Drive and shared
+	// with the user's other devices. DriveSyncedAt: the last exchange.
+	DriveConnected bool   `json:"driveConnected"`
+	DriveSyncedAt  string `json:"driveSyncedAt,omitempty"`
 }
 
 // Usage is the signed-in account's model limits as the CLI reports them.

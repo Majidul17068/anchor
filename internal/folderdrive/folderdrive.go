@@ -251,6 +251,16 @@ func (s *Service) rel(path string) string {
 	return filepath.ToSlash(r)
 }
 
+// RootFolder is the Anchor folder itself, for files that belong to no day
+// (the knowledge base). Its id here is the empty relative path.
+func (s *Service) RootFolder(ctx context.Context) (string, error) {
+	if s.Root() == "" {
+		return "", errors.New("no synced folder chosen")
+	}
+	err := boundedCtx(ctx, opTimeout, func() error { return os.MkdirAll(s.AnchorDir(), 0o755) })
+	return "", err
+}
+
 func (s *Service) DayFolder(ctx context.Context, t time.Time) (string, error) {
 	if s.Root() == "" {
 		return "", errors.New("no synced folder chosen")

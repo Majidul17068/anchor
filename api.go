@@ -47,6 +47,8 @@ type API struct {
 	sync   *anchorsync.Engine
 	market *market.Service
 	learn  *learn.Service
+	// knowledgeKick asks the knowledge loop for an early exchange with Drive.
+	knowledgeKick chan struct{}
 
 	sharedMu   sync.Mutex
 	sharedAt   time.Time
@@ -117,6 +119,7 @@ func NewAPI(version string, logger *log.Logger) *API {
 		}
 		return out, err
 	})
+	a.knowledgeKick = make(chan struct{}, 1)
 	a.learn = a.newLearn(logf)
 	return a
 }
@@ -125,6 +128,7 @@ func (a *API) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.sync.Start()
 	go a.learnLoop()
+	go a.knowledgeLoop()
 	// Warm up in the background so the first screen is fast.
 	go func() {
 		if _, ok := a.loc.Find(); ok && a.eng.AuthStatus() != nil {
@@ -929,6 +933,13 @@ func (a *API) SettingsSet(patch map[string]any) error {
 	_, rules := patch["agentRules"]
 	_, first := patch["firstName"]
 	_, last := patch["lastName"]
+	// When the instructions changed here, note the time: the knowledge base
+	// on Drive keeps whichever device changed them last. A caller that
+	// passes agentRulesAt (instructions arriving from Drive) keeps its time.
+	if _, stamped := patch["agentRulesAt"]; rules && !stamped {
+		_ = a.st.SetSettings(map[string]any{"agentRulesAt": store.Now()})
+		a.kickKnowledgeSync()
+	}
 	if rules || first || last {
 		s := a.st.Settings()
 		author := strings.TrimSpace(strings.TrimSpace(asString(s["firstName"])) + " " + strings.TrimSpace(asString(s["lastName"])))

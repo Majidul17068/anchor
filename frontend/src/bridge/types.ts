@@ -93,6 +93,9 @@ export interface LearnStatus {
   drafts: number;
   lastRunAt?: string;
   lastError?: string;
+  /** The knowledge base is kept on Google Drive and shared with the user's other devices. */
+  driveConnected?: boolean;
+  driveSyncedAt?: string;
 }
 
 /** One limit of the account: window is "weekly" or "5h". */
