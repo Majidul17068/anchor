@@ -149,6 +149,8 @@ export function createWailsBridge(): AnchorBridge {
       openExternal: (url) => call('SystemOpenExternal', url),
       pickFolder: () => call<string>('SystemPickFolder').then((p) => p || null),
       pickFiles: () => call<Attachment[]>('SystemPickFiles').then((f) => f ?? []),
+      saveAttachment: (name, mime, data) => call<Attachment>('SystemSaveAttachment', name, mime, data),
+      imagePreview: (path) => call<string>('SystemImagePreview', path),
     },
 
     auth: {

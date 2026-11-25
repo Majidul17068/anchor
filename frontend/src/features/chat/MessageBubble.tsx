@@ -4,8 +4,8 @@ import { MarkdownView } from '../../components/MarkdownView';
 import { Avatar } from '../../components/Avatar';
 import { useAuthStore } from '../../store/auth';
 import { AnchorGlyph } from '../../components/EmptyState';
-import { Check, Copy, FileText } from 'lucide-react';
-import { formatBytes } from '../../lib/format';
+import { Check, Copy } from 'lucide-react';
+import { AttachmentChip } from './AttachmentChip';
 import { cn } from '../../lib/cn';
 
 export interface MessageBubbleProps {
@@ -46,23 +46,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
       <div className="flex justify-end gap-3 my-3 text-left">
         <div className="max-w-2xl flex flex-col items-end">
-          <div className="bg-[var(--anchor-accent)] text-white px-4 py-3 rounded-2xl rounded-tr-xs shadow-xs text-xs leading-relaxed whitespace-pre-wrap selectable">
-            {text}
-          </div>
+          {text && (
+            <div className="max-w-full bg-[var(--anchor-accent)] text-white px-4 py-3 rounded-2xl rounded-tr-xs shadow-xs text-xs leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere] selectable">
+              {text}
+            </div>
+          )}
 
           {attachments && attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap justify-end gap-2 mt-2">
               {attachments.map((att, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-[11px] text-[var(--anchor-text)]"
-                >
-                  <FileText className="w-3.5 h-3.5 text-[var(--anchor-text-subtle)]" />
-                  <span className="font-medium truncate max-w-[150px]">{att.name}</span>
-                  <span className="text-[10px] text-[var(--anchor-text-subtle)] font-mono">
-                    ({formatBytes(att.size)})
-                  </span>
-                </div>
+                <AttachmentChip key={i} attachment={att} />
               ))}
             </div>
           )}

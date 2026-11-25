@@ -24,6 +24,8 @@ import type {
 } from './types';
 import { createId } from '../lib/ids';
 
+const mockPreviews = new Map<string, string>();
+
 export function createMockBridge(): AnchorBridge {
   let currentAccount: Account | null = {
     email: 'majidulislam17068@gmail.com',
@@ -1435,6 +1437,16 @@ export interface SessionManifest {
             size: 4096,
           },
         ];
+      },
+      async saveAttachment(name: string, mime: string, dataBase64: string) {
+        const path = `/mock/attachments/${name}`;
+        mockPreviews.set(path, `data:${mime};base64,${dataBase64}`);
+        return { name, path, mime, size: Math.floor((dataBase64.length * 3) / 4) };
+      },
+      async imagePreview(path: string) {
+        const url = mockPreviews.get(path);
+        if (!url) throw new Error('not an image');
+        return url;
       },
     },
 

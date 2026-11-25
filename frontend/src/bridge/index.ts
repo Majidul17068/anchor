@@ -39,6 +39,10 @@ export interface AnchorBridge {
     openExternal(url: string): Promise<void>;
     pickFolder(): Promise<string | null>;
     pickFiles(): Promise<Attachment[]>;
+    /** Store pasted or dropped content (base64) as a file and return it as an attachment. */
+    saveAttachment(name: string, mime: string, dataBase64: string): Promise<Attachment>;
+    /** An image file as a data URL, for thumbnails in the chat. */
+    imagePreview(path: string): Promise<string>;
   };
   auth: {
     status(): Promise<Account | null>;

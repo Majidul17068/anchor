@@ -5,6 +5,7 @@ package engine
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1376,9 +1377,36 @@ func attachmentBlocks(atts []model.Attachment) []acp.ContentBlock {
 				continue
 			}
 		}
+		// Pictures go to the model as image content (the CLI advertises
+		// promptCapabilities.image), so it actually sees a screenshot
+		// instead of being handed a path. SVG is text and stays a link.
+		if m := rasterImageMime(a.Mime, a.Path); m != "" && st.Size() <= 8*1024*1024 {
+			if b, err := os.ReadFile(a.Path); err == nil {
+				out = append(out, acp.ContentBlock{Type: "image", Data: base64.StdEncoding.EncodeToString(b), MimeType: m, URI: uri})
+				continue
+			}
+		}
 		out = append(out, acp.ContentBlock{Type: "resource_link", URI: uri, Name: a.Name, MimeType: a.Mime})
 	}
 	return out
+}
+
+func rasterImageMime(mime, path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	}
+	switch mime {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+		return mime
+	}
+	return ""
 }
 
 func isTextMime(mime, path string) bool {
