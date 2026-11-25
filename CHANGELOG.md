@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Usage limits are visible. A meter in the title bar shows the limit
+  closest to running out; clicking it lists, for each model group, how much
+  of the weekly and five-hour allowance is left and when it refills, plus
+  remaining AI credits. Settings has the same under *Usage & Limits*, and
+  `anchorctl usage` prints it. Numbers come from the CLI's own `/usage` and
+  refresh after every turn.
+- The chat header shows how full the model's context window is.
+- Marketplace ratings work: your review and stars appear at once (marked
+  as awaiting publication until the public catalog has them), a second
+  review replaces the first, and opening a listing loads its reviews.
+
 ## 0.3.3 — Agents that run, a marketplace for agents and plugins, pull latest
 
 - Agents created in Anchor work again. The Antigravity CLI silently skips
