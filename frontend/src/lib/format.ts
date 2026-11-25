@@ -7,6 +7,17 @@ export function formatBytes(bytes: number, decimals: number = 1): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+/**
+ * Last part of a folder path written with either separator. Paths come
+ * from macOS, Linux and Windows (and from other devices via sync), so
+ * splitting on "/" alone shows a whole "C:\Users\…" path as the name.
+ */
+export function baseName(path?: string): string {
+  if (!path) return '';
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? '';
+}
+
 export function formatDuration(ms?: number): string {
   if (ms === undefined || ms === null) return '';
   if (ms < 1000) return `${ms}ms`;

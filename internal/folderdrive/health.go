@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Majidul17068/anchor/internal/osutil"
 	"github.com/Majidul17068/anchor/internal/paths"
 )
 
@@ -103,7 +104,9 @@ func ClientRunning() bool {
 	var err error
 	switch runtime.GOOS {
 	case "windows":
-		out, err = exec.Command("tasklist", "/FI", "IMAGENAME eq GoogleDriveFS.exe", "/NH").Output()
+		cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq GoogleDriveFS.exe", "/NH")
+		osutil.HideWindow(cmd) // no console flash each time health is checked
+		out, err = cmd.Output()
 		return err == nil && strings.Contains(strings.ToLower(string(out)), "googledrivefs")
 	case "darwin":
 		out, err = exec.Command("pgrep", "-x", "Google Drive").Output()
@@ -152,10 +155,12 @@ func OpenClient() error {
 		if p == "" {
 			return errors.New("Google Drive for Desktop is not installed")
 		}
-		if strings.HasSuffix(strings.ToLower(p), ".bat") {
-			return exec.Command("cmd", "/C", "start", "", p).Run()
+		if !strings.HasSuffix(strings.ToLower(p), ".bat") {
+			p = filepath.Join(p, "launch.bat")
 		}
-		return exec.Command("cmd", "/C", "start", "", filepath.Join(p, "launch.bat")).Run()
+		cmd := exec.Command("cmd", "/C", "start", "", p)
+		osutil.HideWindow(cmd)
+		return cmd.Run()
 	default:
 		return errors.New("Google Drive for Desktop is not available on Linux; use another synced folder")
 	}
@@ -185,7 +190,10 @@ func Check(path string) Health {
 	if !exists {
 		return Health{Code: "DRIVE_NOT_FOUND", Message: fmt.Sprintf("The folder %s no longer exists.", path)}
 	}
-	if isGoogle {
+	// Google ships Drive for Desktop for macOS and Windows only. On Linux a
+	// "Google Drive" folder is some other tool's mount, so advice about
+	// installing or starting Google's client would be wrong there.
+	if isGoogle && (runtime.GOOS == "darwin" || runtime.GOOS == "windows") {
 		if !AppInstalled() {
 			return Health{Code: "DRIVE_CLIENT_MISSING", Message: "This Google Drive folder is left over from an earlier install; Google Drive for Desktop itself is not installed any more. Install it and sign in, then click Connect again."}
 		}

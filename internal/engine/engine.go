@@ -21,6 +21,7 @@ import (
 	"github.com/Majidul17068/anchor/internal/acp"
 	"github.com/Majidul17068/anchor/internal/cli"
 	"github.com/Majidul17068/anchor/internal/model"
+	"github.com/Majidul17068/anchor/internal/osutil"
 	"github.com/Majidul17068/anchor/internal/paths"
 	"github.com/Majidul17068/anchor/internal/store"
 )
@@ -544,7 +545,25 @@ func (e *Engine) Logout() error {
 	if err2 := e.st.SaveAccount(nil); err == nil {
 		err = err2
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	// Where the CLI keeps the sign-in differs by system (Keychain on macOS,
+	// Credential Manager on Windows, the secret service or a file on
+	// Linux), and only the CLI can clear it. Rather than report a sign-out
+	// that did not happen, ask it: a session that still opens means the
+	// account is still there.
+	if perr := e.Probe(); perr == nil {
+		e.Shutdown()
+		e.mu.Lock()
+		e.tier, e.models, e.probed, e.probeErr = nil, nil, false, nil
+		e.mu.Unlock()
+		return errors.New("the Antigravity CLI is still signed in. Open a terminal, run `agy`, type /logout, then try again")
+	}
+	e.mu.Lock()
+	e.probed, e.probeErr = false, nil
+	e.mu.Unlock()
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1362,7 +1381,7 @@ func attachmentBlocks(atts []model.Attachment) []acp.ContentBlock {
 		if a.Path == "" {
 			continue
 		}
-		uri := "file://" + filepath.ToSlash(a.Path)
+		uri := osutil.FileURI(a.Path)
 		st, err := os.Stat(a.Path)
 		if err != nil {
 			continue

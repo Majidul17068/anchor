@@ -22,6 +22,7 @@ import (
 	"github.com/Majidul17068/anchor/internal/learn"
 	"github.com/Majidul17068/anchor/internal/market"
 	"github.com/Majidul17068/anchor/internal/model"
+	"github.com/Majidul17068/anchor/internal/osutil"
 	"github.com/Majidul17068/anchor/internal/paths"
 	"github.com/Majidul17068/anchor/internal/skills"
 	"github.com/Majidul17068/anchor/internal/store"
@@ -152,6 +153,14 @@ func (a *API) emit(name string, data any) {
 }
 
 func (a *API) openURL(u string) {
+	// The desktop shell refuses file: URLs; folders and local files go to
+	// the system's file manager instead.
+	if p, ok := osutil.PathFromFileURI(u); ok {
+		if err := osutil.OpenPath(p); err != nil {
+			a.log.Printf("open %s: %v", p, err)
+		}
+		return
+	}
 	if a.ctx == nil {
 		return
 	}

@@ -6,6 +6,7 @@ import { getBridge } from '../../bridge';
 import { Button } from '../../components/Button';
 import { Kbd } from '../../components/Kbd';
 import { AttachmentChip } from './AttachmentChip';
+import { baseName } from '../../lib/format';
 import { CornerDownLeft, Paperclip, Square } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
@@ -258,7 +259,7 @@ export const Composer: React.FC<ComposerProps> = ({ sessionId }) => {
 
             {activeSession && (
               <span className="text-[11px] font-mono text-[var(--anchor-text-subtle)] hidden sm:inline">
-                • {activeSession.workspacePaths[0]?.split('/').pop() || 'workspace'}
+                • {baseName(activeSession.workspacePaths[0]) || 'workspace'}
               </span>
             )}
           </div>

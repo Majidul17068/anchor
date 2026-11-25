@@ -12,6 +12,7 @@ import { ModePicker } from './ModePicker';
 import { SyncToggle } from './SyncToggle';
 import { PullLatestButton } from './PullLatestButton';
 import { ContextChip } from './ContextChip';
+import { baseName } from '../../lib/format';
 import { Toast } from '../../components/Toast';
 import { Badge } from '../../components/Badge';
 import { Folder, Laptop, Cloud, Edit2, Check } from 'lucide-react';
@@ -131,7 +132,7 @@ export const ChatPage: React.FC = () => {
                   >
                     <Folder className="w-3 h-3 shrink-0" />
                     <span className="truncate">
-                      {activeSession.workspacePaths[0].split('/').pop() || 'workspace'}
+                      {baseName(activeSession.workspacePaths[0]) || 'workspace'}
                     </span>
                   </div>
                 )}

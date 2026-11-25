@@ -3,9 +3,12 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,6 +110,39 @@ func Run(ctx context.Context, path string, args ...string) (string, error) {
 	return string(out), nil
 }
 
+// downloadInstaller saves the install script to a temporary file.
+func downloadInstaller(ctx context.Context, src string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Anchor")
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return "", err
+	}
+	if len(bytes.TrimSpace(body)) == 0 || !bytes.HasPrefix(bytes.TrimSpace(body), []byte("#!")) {
+		return "", errors.New("the download is not an install script")
+	}
+	f, err := os.CreateTemp("", "agy-install-*.sh")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(body); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
+}
+
 // Install runs Google's official installer for this platform and streams
 // progress. The binary is downloaded from Google at install time; Anchor
 // never bundles it.
@@ -124,11 +160,21 @@ func (l *Locator) Install(ctx context.Context, progress func(model.InstallProgre
 		cmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
 			fmt.Sprintf("[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm %s | iex", installScriptWindows))
 	default:
-		shell := "bash"
-		if _, err := exec.LookPath(shell); err != nil {
-			shell = "sh"
+		// Google's install.sh is a bash script. Anchor downloads it itself
+		// rather than piping curl into a shell: curl is not on every Linux
+		// install, and with a pipe a failed download exits 0 and the user
+		// is told "installer finished but agy was not found".
+		bash, err := exec.LookPath("bash")
+		if err != nil {
+			return "", errors.New("bash is needed to install the Antigravity CLI and was not found; install bash, or install the CLI yourself (see https://antigravity.google) and use Locate")
 		}
-		cmd = exec.CommandContext(ctx, shell, "-c", fmt.Sprintf("curl -fsSL %s | %s", installScriptUnix, shell))
+		script, err := downloadInstaller(ctx, installScriptUnix)
+		if err != nil {
+			return "", fmt.Errorf("could not download the installer from antigravity.google: %w", err)
+		}
+		defer os.Remove(script)
+		report("download", 10, "Installer downloaded")
+		cmd = exec.CommandContext(ctx, bash, script)
 	}
 	hideWindow(cmd)
 	cmd.Env = append(os.Environ(), "CI=1", "NONINTERACTIVE=1")

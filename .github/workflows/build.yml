@@ -86,9 +86,15 @@ jobs:
           wails build -platform linux/amd64 -tags webkit2_41 -clean \
             -ldflags "-s -w -X main.Version=${ANCHOR_VERSION} -X github.com/Majidul17068/anchor/internal/drive.BuildClientID=${{ secrets.ANCHOR_GOOGLE_CLIENT_ID }} -X github.com/Majidul17068/anchor/internal/drive.BuildClientSecret=${{ secrets.ANCHOR_GOOGLE_CLIENT_SECRET }}"
           go build -ldflags "-s -w -X main.Version=${ANCHOR_VERSION}" -o build/bin/anchorctl ./cmd/anchorctl
-          mkdir -p dist
+          # One folder with the app, its companion, a menu entry, the icon
+          # and a per-user installer (no root): ./install.sh
+          mkdir -p dist stage/anchor
           ls -la build/bin
-          tar -C build/bin -czf dist/anchor-linux-amd64.tar.gz Anchor anchorctl
+          cp build/bin/Anchor build/bin/anchorctl stage/anchor/
+          cp build/linux/anchor.desktop build/linux/install.sh stage/anchor/
+          cp build/appicon.png stage/anchor/anchor.png
+          chmod 0755 stage/anchor/Anchor stage/anchor/anchorctl stage/anchor/install.sh
+          tar -C stage -czf dist/anchor-linux-amd64.tar.gz anchor
 
       # Developer ID signing + notarization run only when the Apple secrets
       # exist. Without them the app is ad-hoc signed and Gatekeeper warns

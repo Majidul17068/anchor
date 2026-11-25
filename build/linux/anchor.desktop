@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Anchor
+GenericName=Antigravity desktop client
+Comment=Your Antigravity, anchored to you.
+Exec=anchor
+Icon=anchor
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=Anchor
+Keywords=antigravity;agy;gemini;agent;ai;

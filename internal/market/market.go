@@ -25,6 +25,7 @@ import (
 
 	"github.com/Majidul17068/anchor/internal/agents"
 	"github.com/Majidul17068/anchor/internal/model"
+	"github.com/Majidul17068/anchor/internal/osutil"
 	"github.com/Majidul17068/anchor/internal/paths"
 	"github.com/Majidul17068/anchor/internal/skills"
 	"github.com/Majidul17068/anchor/internal/store"
@@ -484,7 +485,8 @@ func (s *Service) Install(ctx context.Context, id string) (*model.Skill, error) 
 		root := filepath.Join(dir, skills.Slug(l.Name))
 		for _, f := range files {
 			p := filepath.Join(root, filepath.FromSlash(f.Path))
-			if !strings.HasPrefix(p, root) {
+			// Inside root, not merely starting with its name ("root-evil").
+			if !strings.HasPrefix(p, root+string(os.PathSeparator)) {
 				continue
 			}
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -634,7 +636,10 @@ func (s *Service) downloadBundle(ctx context.Context, u string) ([]model.SkillFi
 				name = name[i+1:]
 			}
 		}
-		if name == "" || strings.HasPrefix(name, "..") || strings.HasPrefix(name, "/") {
+		// No way out of the install folder: not upward, not absolute, and
+		// not through a backslash or drive letter (which are path syntax on
+		// Windows even inside a zip written elsewhere).
+		if name == "" || strings.Contains(name, "..") || strings.HasPrefix(name, "/") || strings.ContainsAny(name, `\:`) {
 			continue
 		}
 		rc, err := f.Open()
@@ -840,8 +845,12 @@ func (s *Service) Publish(ctx context.Context, kind, id string, in PublishInput)
 	return s.decorate(listing), nil
 }
 
+// openFolder shows the submission folder in the file manager. The app's
+// "open URL" refuses file: links, so this goes to the system directly.
 func (s *Service) openFolder(dir string) {
-	s.open("file://" + filepath.ToSlash(dir))
+	if err := osutil.OpenPath(dir); err != nil {
+		s.logf("market: open %s: %v", dir, err)
+	}
 }
 
 func (s *Service) Unpublish(ctx context.Context, listingID string) error {

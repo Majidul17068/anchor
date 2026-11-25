@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased (0.3.5)
+
+- Google Drive account: sign-in always shows Google's account chooser;
+  *Change account* moves sync to another account without deleting
+  anything; *Disconnect* signs out, withdraws Anchor's access at Google and
+  clears every link to that Drive, so a device is never stuck on one
+  account. Settings has the same Drive card as the Sync page, and the
+  developer OAuth client section is hidden when the release carries one.
+- Windows and Linux:
+  - CLI install on Linux no longer needs curl and reports a failed
+    download instead of "installer finished but agy was not found"; a
+    missing bash is named.
+  - Attached files reach the agent on Windows (file links were invalid
+    for `C:\…` paths) and paths with spaces are encoded everywhere.
+  - "Open folder" after publishing works on all three systems (the app's
+    URL opener refuses file links; the system file manager is used).
+  - Google Drive for Desktop on Windows is found on drive letters D to Z
+    and in mirror mode, probed together so dead network drives do not
+    stall detection; no console window flashes during health checks.
+  - Linux no longer suggests installing Google's Drive client, which does
+    not exist there.
+  - Project names show correctly for Windows paths.
+  - Sign-out reports a failure when the CLI is in fact still signed in.
+  - The Linux download unpacks to a folder with `install.sh` (menu entry,
+    icon, no root) and names the packages it needs.
+- Safer marketplace installs: bundle entries cannot escape the install
+  folder through `..`, backslashes or drive letters.
+
 ## 0.3.4 — It learns how you work, shows your limits, and reads like a chat should
 
 - Learn from my work (Settings, off by default). Anchor studies your own

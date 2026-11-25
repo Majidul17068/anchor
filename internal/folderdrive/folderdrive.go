@@ -168,10 +168,30 @@ func Candidates() []Candidate {
 		// iCloud Drive is deliberately not detected: Anchor is a Google Drive
 		// product. A user who wants iCloud can still pick the folder by hand.
 	case "windows":
-		// Drive for Desktop mounts a drive letter with "My Drive" at its root.
-		for _, letter := range "GHIJKLMNOPQRSTUVWXYZ" {
-			add(fmt.Sprintf("%c:\\My Drive", letter), "google-drive")
+		// Drive for Desktop mounts a drive letter with "My Drive" at its root
+		// (G: by default, but any free letter from D on). The letters are
+		// probed together: one at a time, a few unresponsive network drives
+		// would stall detection for most of a minute.
+		letters := "DEFGHIJKLMNOPQRSTUVWXYZ"
+		found := make([]*Candidate, len(letters))
+		var wg sync.WaitGroup
+		for i, letter := range letters {
+			wg.Add(1)
+			go func(i int, p string) {
+				defer wg.Done()
+				if Exists(p) {
+					found[i] = &Candidate{Path: p, Kind: "google-drive", Label: Label("google-drive"), Reachable: Reachable(p)}
+				}
+			}(i, fmt.Sprintf("%c:\\My Drive", letter))
 		}
+		wg.Wait()
+		for _, c := range found {
+			if c != nil {
+				out = append(out, *c)
+			}
+		}
+		// Mirror mode keeps the files in a normal folder under the profile.
+		add(filepath.Join(home, "My Drive"), "google-drive")
 		add(filepath.Join(home, "Google Drive", "My Drive"), "google-drive")
 		add(filepath.Join(home, "Google Drive"), "google-drive")
 		if od := os.Getenv("OneDrive"); od != "" {

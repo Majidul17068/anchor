@@ -83,7 +83,7 @@ Grab the file for your OS from the **[latest release](https://github.com/Majidul
 |----|------|-----------|
 | **macOS** (Apple silicon and Intel) | `anchor-macos-universal.dmg` | Drag to Applications and open. Releases built with the Apple signing secrets (see [Signing](#signing-and-notarization)) are notarized and open without warnings. An unsigned build shows *"Anchor" is damaged* or *cannot be opened*; fix it with `xattr -dr com.apple.quarantine /Applications/Anchor.app`, then right-click → Open. |
 | **Windows** | `anchor-windows-amd64-setup.exe` | Run the installer. SmartScreen → *More info → Run anyway*. A portable `anchor-windows-amd64.exe` is attached too. |
-| **Linux** | `anchor-linux-amd64.tar.gz` | `tar xzf anchor-linux-amd64.tar.gz && ./Anchor` (needs WebKitGTK 4.1, present on most desktops) |
+| **Linux** | `anchor-linux-amd64.tar.gz` | `tar xzf anchor-linux-amd64.tar.gz && cd anchor && ./install.sh` adds Anchor to your application menu (no root; `./install.sh --uninstall` removes it). Or run `./Anchor` in place. Needs WebKitGTK 4.1 and bash: on Debian/Ubuntu `sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0`, Fedora `sudo dnf install webkit2gtk4.1 gtk3`, Arch `sudo pacman -S webkit2gtk-4.1 gtk3`. Built on Ubuntu 24.04, so it needs a distribution at least that recent. |
 
 Every release also ships `anchorctl`, a terminal companion for diagnostics and
 scripting (`anchorctl doctor`, `anchorctl sessions`, `anchorctl chat new "…"`).
