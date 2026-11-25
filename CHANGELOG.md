@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.3.5)
+## 0.3.5 — Automations, any Google account, and Windows and Linux done properly
 
 - Automations, a new section in the rail. Give Anchor a task and a
   schedule (every hour, every day, chosen weekdays, or a cron expression)
