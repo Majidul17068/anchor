@@ -29,6 +29,12 @@ export const DriveClientSection: React.FC<{ onShowToast?: (msg: string) => void 
   const [showFields, setShowFields] = useState(false);
   const fieldsVisible = !configured || pasted || showFields;
 
+  // A release that carries the client has nothing for the user here, and the
+  // section read like a place to change the Google account (it is not: that
+  // is the Google Drive account card above). It only appears when a client
+  // is missing, or a maintainer pasted their own.
+  if (configured && !pasted) return null;
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -47,9 +53,9 @@ export const DriveClientSection: React.FC<{ onShowToast?: (msg: string) => void 
             <HardDrive className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[var(--anchor-text)]">Google Drive OAuth client</h3>
+            <h3 className="text-sm font-semibold text-[var(--anchor-text)]">Developer: Google OAuth client</h3>
             <p className="text-xs text-[var(--anchor-text-muted)]">
-              Identifies Anchor to Google when you connect Drive. Users still sign in with their own account.
+              For people building Anchor themselves. It identifies the app to Google; it is not your Google account.
             </p>
           </div>
         </div>
