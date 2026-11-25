@@ -27,6 +27,7 @@ import type {
   Step,
   SyncFolderCandidate,
   SyncStatus,
+  Usage,
 } from './types';
 
 type AnyFn = (...args: unknown[]) => Promise<unknown>;
@@ -163,6 +164,7 @@ export function createWailsBridge(): AnchorBridge {
     },
 
     models: { list: () => call<Model[]>('ModelsList').then((m) => m ?? []) },
+    usage: { get: (force) => call<Usage>('UsageGet', Boolean(force)) },
     projects: { list: () => call<Project[]>('ProjectsList').then((p) => p ?? []) },
 
     sessions: {

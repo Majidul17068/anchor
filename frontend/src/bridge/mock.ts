@@ -1472,6 +1472,34 @@ export interface SessionManifest {
       },
     },
 
+    usage: {
+      async get() {
+        const h = 3600_000;
+        return {
+          tier: 'Google AI Pro',
+          description: 'Within each group, models share a weekly limit and a 5-hour limit.',
+          groups: [
+            {
+              name: 'Gemini Models',
+              description: 'Models within this group: Gemini 4 Neon, Gemini 4 Carbon, Gemini 3.8 Flash',
+              buckets: [
+                { id: 'gemini-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remainingFraction: 0.62, resetTime: new Date(Date.now() + 96 * h).toISOString() },
+                { id: 'gemini-5h', name: 'Five Hour Limit Remaining', window: '5h', remainingFraction: 0.18, resetTime: new Date(Date.now() + 2.4 * h).toISOString() },
+              ],
+            },
+            {
+              name: 'Claude and GPT models',
+              buckets: [
+                { id: '3p-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remainingFraction: 1, resetTime: new Date(Date.now() + 150 * h).toISOString() },
+                { id: '3p-5h', name: 'Five Hour Limit Remaining', window: '5h', remainingFraction: 1, resetTime: new Date(Date.now() + 5 * h).toISOString() },
+              ],
+            },
+          ],
+          credits: { remaining: 0, upgradeUri: 'https://antigravity.google/g1-upgrade' },
+          fetchedAt: new Date().toISOString(),
+        };
+      },
+    },
     models: {
       async list() {
         return [...models];

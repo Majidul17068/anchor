@@ -279,6 +279,11 @@ func (a *API) DevicesList() []model.Device {
 
 func (a *API) ModelsList() ([]model.Model, error) { return a.eng.Models() }
 
+// UsageGet returns the account's model limits (weekly and five-hour, per
+// model group) and remaining AI credits, as the CLI reports them. Cached
+// for a minute unless force is set.
+func (a *API) UsageGet(force bool) (model.Usage, error) { return a.eng.Usage(force) }
+
 func (a *API) ProjectsList() ([]model.Project, error) { return a.eng.Projects() }
 
 // ---------------------------------------------------------------------------

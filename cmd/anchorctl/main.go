@@ -204,6 +204,21 @@ func main() {
 		} else {
 			fmt.Println("Chosen folder: none (Sync → Connect Google Drive)")
 		}
+	case "usage":
+		// The account's limits, as the app's title-bar meter shows them.
+		u, err := eng.Usage(true)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, g := range u.Groups {
+			fmt.Println(g.Name)
+			for _, b := range g.Buckets {
+				fmt.Printf("  %-8s %3.0f%% left   resets %s\n", b.Window, b.RemainingFraction*100, b.ResetTime)
+			}
+		}
+		if u.Credits != nil {
+			fmt.Printf("AI credits remaining: %.0f\n", u.Credits.Remaining)
+		}
 	case "version":
 		fmt.Println("anchorctl", Version)
 	default:
@@ -221,5 +236,5 @@ func trunc(s string, n int) string {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: anchorctl doctor | sessions | chat <id|new> <text> | skills | agents | sync | drive | version")
+	fmt.Fprintln(os.Stderr, "usage: anchorctl doctor | sessions | chat <id|new> <text> | skills | agents | sync | drive | usage | version")
 }

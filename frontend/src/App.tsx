@@ -18,6 +18,8 @@ import { useChatStore } from './store/chat';
 import { useAuthStore } from './store/auth';
 import { useSettingsStore } from './store/settings';
 import { useSyncStore } from './store/sync';
+import { useUsageStore } from './store/usage';
+import type { Session } from './bridge/types';
 import { useShortcut } from './hooks/useShortcut';
 
 export default function App() {
@@ -74,7 +76,7 @@ export default function App() {
   // CLI, turns finishing, Drive sync pulls); refresh the list and the
   // active session without disturbing an in-flight stream.
   useEffect(() => {
-    const off = window.runtime?.EventsOn('sessions:changed', async () => {
+    const off = window.runtime?.EventsOn('sessions:changed', async (raw: unknown) => {
       await loadSessions();
       const { currentSessionId, sessions } = useSessionStore.getState();
       const current = sessions.find((s) => s.id === currentSessionId);
@@ -82,9 +84,40 @@ export default function App() {
         useSessionStore.setState({ activeSession: current });
         document.title = `Anchor — ${current.title}`;
       }
+      // A turn that just ended spent some of the allowance: read it again.
+      const data = (raw ?? {}) as { sessionId?: string; source?: string };
+      if (data.sessionId && !data.source && !useChatStore.getState().isStreaming) {
+        void useUsageStore.getState().load(true);
+      }
     });
     return () => off?.();
   }, [loadSessions]);
+
+  // Account limits: read once the account is known, then every five minutes
+  // so the title-bar meter and its countdowns stay honest.
+  useEffect(() => {
+    if (!account) {
+      useUsageStore.getState().clear();
+      return;
+    }
+    void useUsageStore.getState().load();
+    const t = setInterval(() => void useUsageStore.getState().load(true), 5 * 60_000);
+    return () => clearInterval(t);
+  }, [account]);
+
+  // The CLI reports how full the context window is as a chat goes on.
+  useEffect(() => {
+    const off = window.runtime?.EventsOn('session:context', (raw: unknown) => {
+      const d = (raw ?? {}) as { sessionId?: string; used?: number; size?: number };
+      if (!d.sessionId) return;
+      const patch = (s: Session): Session => (s.id === d.sessionId ? { ...s, contextUsed: d.used, contextSize: d.size } : s);
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map(patch),
+        activeSession: state.activeSession ? patch(state.activeSession) : null,
+      }));
+    });
+    return () => off?.();
+  }, []);
 
   // Drive sync rewrote a transcript (another device continued the chat):
   // reload the open conversation unless a turn is streaming here.

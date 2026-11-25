@@ -3,6 +3,7 @@ import { useSettingsStore } from '../../store/settings';
 import { useAuthStore } from '../../store/auth';
 import { CliSection } from './CliSection';
 import { AccountSection } from './AccountSection';
+import { UsageSection } from './UsageSection';
 import { AppearanceSection } from './AppearanceSection';
 import { ShortcutsSection } from './ShortcutsSection';
 import { DangerZone } from './DangerZone';
@@ -33,6 +34,7 @@ export const SettingsPage: React.FC = () => {
 
       <CliSection />
       <AccountSection />
+      <UsageSection />
       <ProfileSection onShowToast={setToastMessage} />
       <DriveClientSection onShowToast={setToastMessage} />
       <AppearanceSection />

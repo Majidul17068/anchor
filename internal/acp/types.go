@@ -172,6 +172,10 @@ type SessionUpdate struct {
 	// current_mode_update
 	CurrentModeID string `json:"currentModeId,omitempty"`
 
+	// usage_update: tokens in the context window and its size
+	Used int64 `json:"used,omitempty"`
+	Size int64 `json:"size,omitempty"`
+
 	// config_option_update
 	ConfigOptions []ConfigOption `json:"configOptions,omitempty"`
 

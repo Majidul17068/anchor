@@ -51,6 +51,8 @@ type Engine struct {
 	authMethods []acp.AuthMethod
 	probed      bool
 	probeErr    error // result of the last Probe; AUTH_REQUIRED means signed out
+
+	usage usageCache // account limits, see usage.go
 }
 
 type proc struct {

@@ -11,6 +11,7 @@ import { EffortPicker } from './EffortPicker';
 import { ModePicker } from './ModePicker';
 import { SyncToggle } from './SyncToggle';
 import { PullLatestButton } from './PullLatestButton';
+import { ContextChip } from './ContextChip';
 import { Toast } from '../../components/Toast';
 import { Badge } from '../../components/Badge';
 import { Folder, Laptop, Cloud, Edit2, Check } from 'lucide-react';
@@ -137,6 +138,7 @@ export const ChatPage: React.FC = () => {
                 <ModelPicker />
                 <EffortPicker />
                 <ModePicker />
+                <ContextChip />
                 <SyncToggle />
                 <PullLatestButton />
               </div>

@@ -24,6 +24,7 @@ import type {
   Step,
   SyncFolderCandidate,
   SyncStatus,
+  Usage,
 } from './types';
 import { createMockBridge } from './mock';
 
@@ -51,6 +52,10 @@ export interface AnchorBridge {
   };
   models: {
     list(): Promise<Model[]>;
+  };
+  usage: {
+    /** Weekly and five-hour limits per model group, plus AI credits. Cached a minute unless force. */
+    get(force?: boolean): Promise<Usage>;
   };
   projects: {
     list(): Promise<Project[]>;

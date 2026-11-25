@@ -46,7 +46,21 @@ func (l *live) handleUpdate(u *acp.SessionUpdate) {
 			l.mu.Unlock()
 		}
 		return
-	case "config_option_update", "available_commands_update", "usage_update":
+	case "usage_update":
+		// How full the context window is. Kept on the session and pushed to
+		// the UI as it changes; saved with the session when the turn ends.
+		if u.Size > 0 {
+			l.mu.Lock()
+			changed := l.meta.ContextUsed != u.Used || l.meta.ContextSize != u.Size
+			l.meta.ContextUsed, l.meta.ContextSize = u.Used, u.Size
+			id := l.meta.ID
+			l.mu.Unlock()
+			if changed {
+				l.eng.emit("session:context", map[string]any{"sessionId": id, "used": u.Used, "size": u.Size})
+			}
+		}
+		return
+	case "config_option_update", "available_commands_update":
 		return
 	}
 	if !streaming && !loading {

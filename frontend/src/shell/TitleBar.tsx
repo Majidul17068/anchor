@@ -6,6 +6,7 @@ import { AnchorGlyph } from '../components/EmptyState';
 import { Badge } from '../components/Badge';
 import { Cloud, CloudOff, Laptop, Search } from 'lucide-react';
 import { Kbd } from '../components/Kbd';
+import { UsageMeter } from '../features/usage/UsageMeter';
 
 export interface TitleBarProps {
   onOpenCommandPalette: () => void;
@@ -69,6 +70,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenCommandPalette }) => {
 
       {/* Right: Device & Drive Sync Indicator */}
       <div className="flex items-center gap-3 text-[11px]">
+        {account && <UsageMeter />}
         {thisDevice && (
           <div className="flex items-center gap-1.5 text-[var(--anchor-text-subtle)] hover:text-[var(--anchor-text-muted)]">
             <Laptop className="w-3.5 h-3.5" />

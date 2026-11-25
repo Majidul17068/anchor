@@ -54,6 +54,36 @@ export interface Session {
   pinned: boolean;
   /** When this device last exchanged the session with Drive. */
   lastSyncedAt?: string;
+  /** Tokens in the model's context window for this chat, and the window's size. */
+  contextUsed?: number;
+  contextSize?: number;
+}
+
+/** One limit of the account: window is "weekly" or "5h". */
+export interface UsageBucket {
+  id: string;
+  name: string;
+  description?: string;
+  window: string;
+  /** 0..1, share of the limit still available. */
+  remainingFraction: number;
+  resetTime?: string;
+}
+
+/** Models that share limits, e.g. "Gemini Models". */
+export interface UsageGroup {
+  name: string;
+  description?: string;
+  buckets: UsageBucket[];
+}
+
+/** The signed-in account's model limits, as the Antigravity CLI reports them. */
+export interface Usage {
+  tier?: string;
+  description?: string;
+  groups: UsageGroup[];
+  credits?: { remaining: number; upgradeUri?: string };
+  fetchedAt: string;
 }
 
 export interface Attachment {
@@ -204,6 +234,10 @@ export interface Review {
   rating: number;
   text: string;
   at: string;
+  /** The signed-in user's own review. */
+  mine?: boolean;
+  /** Saved here and submitted, not yet in the public catalog. */
+  pending?: boolean;
 }
 
 export interface SkillRequest {
