@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.4 — It learns how you work, shows your limits, and reads like a chat should
 
 - Learn from my work (Settings, off by default). Anchor studies your own
   messages from recent chats and proposes standing instructions for
