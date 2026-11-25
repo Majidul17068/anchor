@@ -28,6 +28,10 @@ import type {
   LearnStatus,
   Suggestion,
   SuggestionEdit,
+  Automation,
+  AutomationRun,
+  AutomationSchedule,
+  BackgroundStatus,
 } from './types';
 import { createMockBridge } from './mock';
 
@@ -207,6 +211,26 @@ export interface AnchorBridge {
   settings: {
     get(): Promise<Record<string, unknown>>;
     set(patch: Record<string, unknown>): Promise<void>;
+  };
+  /** Scheduled tasks Anchor runs unattended; each run is a fresh conversation. */
+  automations: {
+    list(): Promise<Automation[]>;
+    /** Create (no id) or update. */
+    save(a: Partial<Automation> & Pick<Automation, 'name' | 'prompt' | 'schedule' | 'access'>): Promise<Automation>;
+    setEnabled(id: string, on: boolean): Promise<Automation>;
+    delete(id: string): Promise<void>;
+    runNow(id: string): Promise<void>;
+    runs(id: string): Promise<AutomationRun[]>;
+    /** A schedule in words and its next run, without saving. */
+    preview(s: AutomationSchedule): Promise<{ text: string; nextRunAt: string }>;
+    /** The Antigravity CLI's own scheduled automations not yet in Anchor. */
+    importable(): Promise<Automation[]>;
+    /** Write it in the CLI's format (shows in Google's dashboard, off); returns the file path. */
+    exportToCli(id: string): Promise<string>;
+    background(): Promise<BackgroundStatus>;
+    setBackground(runInBackground: boolean, startAtLogin: boolean): Promise<BackgroundStatus>;
+    quit(): Promise<void>;
+    onChange(cb: () => void): () => void;
   };
   /** "Learn from my work": proposals drawn from how the user works; nothing applies until accepted. */
   learn: {

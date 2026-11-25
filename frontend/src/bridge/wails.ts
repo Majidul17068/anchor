@@ -30,6 +30,9 @@ import type {
   Usage,
   LearnStatus,
   Suggestion,
+  Automation,
+  AutomationRun,
+  BackgroundStatus,
 } from './types';
 
 type AnyFn = (...args: unknown[]) => Promise<unknown>;
@@ -272,6 +275,22 @@ export function createWailsBridge(): AnchorBridge {
     settings: {
       get: () => call<Record<string, unknown>>('SettingsGet'),
       set: (patch) => call('SettingsSet', patch),
+    },
+
+    automations: {
+      list: () => call<Automation[]>('AutomationsList').then((a) => a ?? []),
+      save: (a) => call<Automation>('AutomationsSave', a),
+      setEnabled: (id, on) => call<Automation>('AutomationsSetEnabled', id, on),
+      delete: (id) => call('AutomationsDelete', id),
+      runNow: (id) => call('AutomationsRunNow', id),
+      runs: (id) => call<AutomationRun[]>('AutomationsRuns', id).then((r) => r ?? []),
+      preview: (s) => call<{ text: string; nextRunAt: string }>('AutomationsPreview', s),
+      importable: () => call<Automation[]>('AutomationsImportable').then((a) => a ?? []),
+      exportToCli: (id) => call<string>('AutomationsExport', id),
+      background: () => call<BackgroundStatus>('BackgroundGet'),
+      setBackground: (run, login) => call<BackgroundStatus>('BackgroundSet', run, login),
+      quit: () => call('AppQuit'),
+      onChange: (cb) => window.runtime!.EventsOn('automations:changed', () => cb()),
     },
 
     learn: {

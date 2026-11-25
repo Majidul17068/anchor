@@ -9,6 +9,7 @@ import { AgentsPage } from './features/agents/AgentsPage';
 import { SkillsPage } from './features/skills/SkillsPage';
 import { MarketPage } from './features/market/MarketPage';
 import { SyncPage } from './features/sync/SyncPage';
+import { AutomationsPage } from './features/automations/AutomationsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { ConfirmHost } from './components/ConfirmDialog';
@@ -20,6 +21,7 @@ import { useSettingsStore } from './store/settings';
 import { useSyncStore } from './store/sync';
 import { useUsageStore } from './store/usage';
 import { useLearnStore } from './store/learn';
+import { useAutomationsStore } from './store/automations';
 import type { LearnStatus, Session } from './bridge/types';
 import { useShortcut } from './hooks/useShortcut';
 
@@ -27,7 +29,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<RailTab>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('anchor.rail') as RailTab;
-      if (['chat', 'history', 'agents', 'skills', 'market', 'sync', 'settings'].includes(saved)) {
+      if (['chat', 'history', 'agents', 'skills', 'market', 'sync', 'automations', 'settings'].includes(saved)) {
         return saved;
       }
     }
@@ -104,6 +106,15 @@ export default function App() {
     void useUsageStore.getState().load();
     const t = setInterval(() => void useUsageStore.getState().load(true), 5 * 60_000);
     return () => clearInterval(t);
+  }, [account]);
+
+  // Automations run in the background; keep their state current so the
+  // rail shows when one is running, whichever page is open.
+  useEffect(() => {
+    if (!account) return;
+    void useAutomationsStore.getState().load();
+    const off = window.runtime?.EventsOn('automations:changed', () => void useAutomationsStore.getState().load());
+    return () => off?.();
   }, [account]);
 
   // "Learn from my work": keep the count of drafts waiting for review
@@ -197,7 +208,8 @@ export default function App() {
   useShortcut('4', () => handleSelectTab('skills'), { ctrlOrMeta: true });
   useShortcut('5', () => handleSelectTab('market'), { ctrlOrMeta: true });
   useShortcut('6', () => handleSelectTab('sync'), { ctrlOrMeta: true });
-  useShortcut('7', () => handleSelectTab('settings'), { ctrlOrMeta: true });
+  useShortcut('7', () => handleSelectTab('automations'), { ctrlOrMeta: true });
+  useShortcut('8', () => handleSelectTab('settings'), { ctrlOrMeta: true });
 
   // Cmd/Ctrl+Shift+S: Toggle Sync (parent only)
   useShortcut(
@@ -258,6 +270,15 @@ export default function App() {
           {activeTab === 'skills' && <SkillsPage />}
           {activeTab === 'market' && <MarketPage />}
           {activeTab === 'sync' && <SyncPage />}
+          {activeTab === 'automations' && (
+            <AutomationsPage
+              onOpenSession={async (id) => {
+                await loadSessions();
+                selectSession(id);
+                handleSelectTab('chat');
+              }}
+            />
+          )}
           {activeTab === 'settings' && <SettingsPage />}
         </main>
 

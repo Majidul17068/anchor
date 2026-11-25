@@ -38,12 +38,31 @@ func main() {
 	logger := setupLog()
 	api := NewAPI(Version, logger)
 
+	// Automations run while Anchor runs. With "keep running in the
+	// background" on, closing the window hides it instead of quitting, and
+	// a start at login (--background) opens no window at all. Starting
+	// Anchor again brings the hidden window back: one instance only, so an
+	// automation is never run by two copies at once.
+	background := api.runsInBackground()
+	startHidden := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--background" {
+			startHidden = background
+		}
+	}
+
 	err := wails.Run(&options.App{
-		Title:            "Anchor",
-		Width:            1320,
-		Height:           860,
-		MinWidth:         1024,
-		MinHeight:        680,
+		Title:             "Anchor",
+		Width:             1320,
+		Height:            860,
+		MinWidth:          1024,
+		MinHeight:         680,
+		StartHidden:       startHidden,
+		HideWindowOnClose: background,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "com.anchor.desktop.single-instance",
+			OnSecondInstanceLaunch: api.onSecondInstance,
+		},
 		BackgroundColour: &options.RGBA{R: 0x11, G: 0x12, B: 0x17, A: 255},
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        api.startup,

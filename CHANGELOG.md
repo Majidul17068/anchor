@@ -2,6 +2,23 @@
 
 ## Unreleased (0.3.5)
 
+- Automations, a new section in the rail. Give Anchor a task and a
+  schedule (every hour, every day, chosen weekdays, or a cron expression)
+  and it starts a fresh conversation with that prompt each time, nobody at
+  the keyboard. Every run is kept as a normal session and listed in the
+  automation's history with its result; *Run now* tries it at once.
+  - You choose what a run may do without asking: look and report, change
+    files in its folder, or also run commands. A run that needs more than
+    it is allowed stops and says what it wanted.
+  - A run missed while Anchor was closed is made up once at the next
+    start, if the automation is set to.
+  - *Keep running when I close the window* and *Start when I sign in* keep
+    automations going without the window; starting Anchor again brings the
+    window back (one copy only ever runs).
+  - The Antigravity CLI's own automations can be brought into Anchor, and
+    an Anchor automation exported in the CLI's format.
+  - `anchorctl run "<prompt>"` does one unattended run from the terminal.
+
 - Google Drive account: sign-in always shows Google's account chooser;
   *Change account* moves sync to another account without deleting
   anything; *Disconnect* signs out, withdraws Anchor's access at Google and

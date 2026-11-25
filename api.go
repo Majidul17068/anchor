@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/Majidul17068/anchor/internal/agents"
+	"github.com/Majidul17068/anchor/internal/automation"
 	"github.com/Majidul17068/anchor/internal/cli"
 	"github.com/Majidul17068/anchor/internal/drive"
 	"github.com/Majidul17068/anchor/internal/engine"
@@ -50,6 +51,9 @@ type API struct {
 	learn  *learn.Service
 	// knowledgeKick asks the knowledge loop for an early exchange with Drive.
 	knowledgeKick chan struct{}
+	auto          *automation.Service
+	// backgroundActive: this running copy hides its window instead of quitting.
+	backgroundActive bool
 
 	sharedMu   sync.Mutex
 	sharedAt   time.Time
@@ -122,12 +126,15 @@ func NewAPI(version string, logger *log.Logger) *API {
 	})
 	a.knowledgeKick = make(chan struct{}, 1)
 	a.learn = a.newLearn(logf)
+	a.auto = a.newAutomations(logf)
+	a.backgroundActive = a.runsInBackground()
 	return a
 }
 
 func (a *API) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.sync.Start()
+	a.auto.Start()
 	go a.learnLoop()
 	go a.knowledgeLoop()
 	// Warm up in the background so the first screen is fast.
@@ -141,6 +148,7 @@ func (a *API) startup(ctx context.Context) {
 }
 
 func (a *API) shutdown(ctx context.Context) {
+	a.auto.Stop()
 	a.sync.Stop()
 	a.eng.Shutdown()
 }

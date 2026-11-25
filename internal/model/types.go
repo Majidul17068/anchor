@@ -133,6 +133,65 @@ type LearnStatus struct {
 	DriveSyncedAt  string `json:"driveSyncedAt,omitempty"`
 }
 
+// AutomationSchedule is when an automation runs. Kind is hourly (Minute),
+// daily (Hour:Minute), weekly (Weekdays 0=Sunday..6 at Hour:Minute) or
+// custom (Cron, five fields). Timezone is an IANA name; empty means the
+// computer's.
+type AutomationSchedule struct {
+	Kind     string `json:"kind"`
+	Minute   int    `json:"minute"`
+	Hour     int    `json:"hour"`
+	Weekdays []int  `json:"weekdays"`
+	Cron     string `json:"cron,omitempty"`
+	Timezone string `json:"timezone,omitempty"`
+}
+
+// Automation is a task Anchor runs on a schedule: each run starts a fresh
+// conversation with Prompt and nobody at the keyboard.
+type Automation struct {
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description,omitempty"`
+	Prompt      string             `json:"prompt"`
+	Schedule    AutomationSchedule `json:"schedule"`
+	Enabled     bool               `json:"enabled"`
+	AgentID     string             `json:"agentId,omitempty"`
+	ModelID     string             `json:"modelId,omitempty"`
+	Effort      Effort             `json:"effort,omitempty"`
+	// Workspace is the folder the run works in; empty means the home folder.
+	Workspace string `json:"workspace,omitempty"`
+	// Access is what a run may do without anyone to ask:
+	//   read    - look and answer; every edit or command is refused
+	//   edit    - may also change files in the workspace
+	//   full    - may also run commands
+	Access string `json:"access"`
+	// CatchUp runs once at start when a run was missed while Anchor was closed.
+	CatchUp   bool   `json:"catchUp"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+
+	// Filled in when read:
+	ScheduleText string         `json:"scheduleText,omitempty"`
+	NextRunAt    string         `json:"nextRunAt,omitempty"`
+	Running      bool           `json:"running"`
+	LastRun      *AutomationRun `json:"lastRun,omitempty"`
+}
+
+// AutomationRun is one execution of an automation.
+type AutomationRun struct {
+	ID           string `json:"id"`
+	AutomationID string `json:"automationId"`
+	Trigger      string `json:"trigger"` // schedule | manual | catch-up
+	StartedAt    string `json:"startedAt"`
+	FinishedAt   string `json:"finishedAt,omitempty"`
+	Status       string `json:"status"` // running | ok | error
+	Error        string `json:"error,omitempty"`
+	// SessionID is the conversation the run happened in; Summary the first
+	// lines of what the agent answered.
+	SessionID string `json:"sessionId,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+}
+
 // Usage is the signed-in account's model limits as the CLI reports them.
 type Usage struct {
 	Tier        string        `json:"tier,omitempty"`

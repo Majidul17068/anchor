@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Majidul17068/anchor/internal/agents"
 	"github.com/Majidul17068/anchor/internal/cli"
@@ -240,6 +241,20 @@ func main() {
 				fmt.Printf("  name: %s — %s\n", sg.Name, sg.Description)
 			}
 		}
+	case "run":
+		// One unattended run, exactly as an automation does it: a new
+		// conversation, the prompt, permission prompts refused.
+		if len(os.Args) < 3 {
+			log.Fatal(`usage: anchorctl run "<prompt>"`)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		s, out, err := eng.RunUnattended(ctx, engine.CreateInput{Title: "⏱ anchorctl run"}, strings.Join(os.Args[2:], " "), "deny")
+		fmt.Printf("session: %s\n", s.ID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(out)
 	case "version":
 		fmt.Println("anchorctl", Version)
 	default:

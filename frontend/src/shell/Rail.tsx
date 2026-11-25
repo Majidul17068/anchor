@@ -3,12 +3,14 @@ import { useAuthStore } from '../store/auth';
 import { useSettingsStore } from '../store/settings';
 import { useMarketStore } from '../store/market';
 import { useLearnStore } from '../store/learn';
+import { useAutomationsStore } from '../store/automations';
 import { useTheme } from '../hooks/useTheme';
 import { confirmDialog } from '../store/confirm';
 import { Avatar } from '../components/Avatar';
 import { Badge } from '../components/Badge';
 import { Tooltip } from '../components/Tooltip';
 import {
+  CalendarClock,
   Clock,
   Cpu,
   Layers,
@@ -24,7 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 
-export type RailTab = 'chat' | 'history' | 'agents' | 'skills' | 'market' | 'sync' | 'settings';
+export type RailTab = 'chat' | 'history' | 'agents' | 'skills' | 'market' | 'sync' | 'automations' | 'settings';
 
 export interface RailProps {
   activeTab: RailTab;
@@ -38,6 +40,8 @@ export const Rail: React.FC<RailProps> = ({ activeTab, onSelectTab }) => {
   const updatesCount = useMarketStore((s) => s.updatesAvailable.length);
   // Suggestions waiting for review ("Learn from my work") live in Settings.
   const learnDrafts = useLearnStore((s) => s.status?.drafts ?? 0);
+  // Automations running right now show as a count on their icon.
+  const automationsRunning = useAutomationsStore((s) => s.list.filter((a) => a.running).length);
   const { isDark, toggleTheme } = useTheme();
 
   // Account menu on the avatar: who is signed in, jump to Settings, sign out.
@@ -112,10 +116,17 @@ export const Rail: React.FC<RailProps> = ({ activeTab, onSelectTab }) => {
       shortcut: `${modKey}6`,
     },
     {
+      id: 'automations',
+      label: 'Automations',
+      icon: <CalendarClock className="w-5 h-5" />,
+      shortcut: `${modKey}7`,
+      badge: automationsRunning > 0 ? automationsRunning : undefined,
+    },
+    {
       id: 'settings',
       label: 'Settings',
       icon: <Settings className="w-5 h-5" />,
-      shortcut: `${modKey}7`,
+      shortcut: `${modKey}8`,
       badge: learnDrafts > 0 ? learnDrafts : undefined,
     },
   ];

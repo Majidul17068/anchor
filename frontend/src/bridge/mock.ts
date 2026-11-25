@@ -24,6 +24,8 @@ import type {
   LearnStatus,
   Suggestion,
   SuggestionEdit,
+  Automation,
+  BackgroundStatus,
 } from './types';
 import { createId } from '../lib/ids';
 
@@ -2239,6 +2241,41 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         settingsRecord = { ...settingsRecord, ...patch };
       },
     },
+
+    automations: (() => {
+      const h = 3600_000;
+      let list: Automation[] = [
+        {
+          id: 'auto_1', name: 'Morning PR check', prompt: 'List my open pull requests and flag any with failing checks.', enabled: true,
+          schedule: { kind: 'weekly', minute: 0, hour: 9, weekdays: [1, 2, 3, 4, 5] }, access: 'read', catchUp: true,
+          scheduleText: 'Weekdays at 09:00', nextRunAt: new Date(Date.now() + 14 * h).toISOString(),
+          lastRun: { id: 'run_1', automationId: 'auto_1', trigger: 'schedule', startedAt: new Date(Date.now() - 10 * h).toISOString(), finishedAt: new Date(Date.now() - 10 * h + 42_000).toISOString(), status: 'ok', sessionId: 'sess_1', summary: '3 pull requests open. #482 has a failing lint check.' },
+        },
+      ];
+      let bg: BackgroundStatus = { runInBackground: false, startAtLogin: false, active: false };
+      return {
+        async list() { return [...list]; },
+        async save(a: Partial<Automation>) {
+          const full = { ...a, id: a.id || createId('auto'), enabled: a.enabled ?? true, catchUp: a.catchUp ?? false, scheduleText: 'Every day at 09:00', nextRunAt: new Date(Date.now() + 5 * h).toISOString() } as Automation;
+          list = list.some((x) => x.id === full.id) ? list.map((x) => (x.id === full.id ? full : x)) : [...list, full];
+          return full;
+        },
+        async setEnabled(id: string, on: boolean) {
+          list = list.map((x) => (x.id === id ? { ...x, enabled: on } : x));
+          return list.find((x) => x.id === id)!;
+        },
+        async delete(id: string) { list = list.filter((x) => x.id !== id); },
+        async runNow() {},
+        async runs(id: string) { const a = list.find((x) => x.id === id); return a?.lastRun ? [a.lastRun] : []; },
+        async preview() { return { text: 'Every day at 09:00', nextRunAt: new Date(Date.now() + 5 * h).toISOString() }; },
+        async importable() { return []; },
+        async exportToCli() { return '/Users/me/.gemini/config/sidecars/anchor-morning-pr-check/sidecar.json'; },
+        async background() { return bg; },
+        async setBackground(run: boolean, login: boolean) { bg = { runInBackground: run || login, startAtLogin: login, active: false }; return bg; },
+        async quit() {},
+        onChange() { return () => {}; },
+      };
+    })(),
 
     learn: (() => {
       let items: Suggestion[] = [

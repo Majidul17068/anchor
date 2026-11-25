@@ -98,6 +98,66 @@ export interface LearnStatus {
   driveSyncedAt?: string;
 }
 
+/** When an automation runs. Weekdays: 0 = Sunday … 6 = Saturday. */
+export interface AutomationSchedule {
+  kind: 'hourly' | 'daily' | 'weekly' | 'custom';
+  minute: number;
+  hour: number;
+  weekdays: number[];
+  /** Five-field cron expression, for kind "custom". */
+  cron?: string;
+  /** IANA zone; empty means this computer's. */
+  timezone?: string;
+}
+
+/** What a run may do with nobody to ask. */
+export type AutomationAccess = 'read' | 'edit' | 'full';
+
+export interface AutomationRun {
+  id: string;
+  automationId: string;
+  trigger: 'schedule' | 'manual' | 'catch-up';
+  startedAt: string;
+  finishedAt?: string;
+  status: 'running' | 'ok' | 'error';
+  error?: string;
+  /** The conversation the run happened in. */
+  sessionId?: string;
+  summary?: string;
+}
+
+/** A task Anchor runs on a schedule; each run starts a fresh conversation with the prompt. */
+export interface Automation {
+  id: string;
+  name: string;
+  description?: string;
+  prompt: string;
+  schedule: AutomationSchedule;
+  enabled: boolean;
+  agentId?: string;
+  modelId?: string;
+  effort?: Effort;
+  /** Folder the run works in; empty means the home folder. */
+  workspace?: string;
+  access: AutomationAccess;
+  /** Run once at start if a run was missed while Anchor was closed. */
+  catchUp: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  scheduleText?: string;
+  nextRunAt?: string;
+  running?: boolean;
+  lastRun?: AutomationRun;
+}
+
+/** Whether Anchor keeps running (and automating) without its window. */
+export interface BackgroundStatus {
+  runInBackground: boolean;
+  startAtLogin: boolean;
+  /** This running copy already hides instead of quitting. */
+  active: boolean;
+}
+
 /** One limit of the account: window is "weekly" or "5h". */
 export interface UsageBucket {
   id: string;

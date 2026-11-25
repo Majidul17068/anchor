@@ -248,7 +248,17 @@ func (l *live) handlePermission(ctx context.Context, req *acp.RequestPermissionP
 	l.agentIdx, l.thoughtIdx = -1, -1
 	l.perms[st.ID] = ch
 	streaming := l.streamID != ""
+	auto := l.autoPerm
 	l.mu.Unlock()
+	// An unattended run has nobody to ask: the automation's own setting
+	// decides, and the decision is recorded in the transcript.
+	if auto != "" {
+		if auto == "allow" {
+			ch <- "once"
+		} else {
+			ch <- "deny"
+		}
+	}
 	if streaming {
 		l.emitChat(model.ChatEvent{Type: "step", Step: &st})
 	} else {

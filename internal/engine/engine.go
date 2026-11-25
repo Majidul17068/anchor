@@ -81,6 +81,11 @@ type live struct {
 	// unseen holds steps other devices added (merged in by Drive sync) that
 	// the CLI session has not been told about; the next prompt carries them.
 	unseen []model.Step
+	// autoPerm answers permission prompts without a person, for unattended
+	// runs (automations): "allow" or "deny". Empty means ask in the UI.
+	autoPerm string
+	// lastTurnErr is the error the last turn ended with, if any.
+	lastTurnErr string
 
 	loading    bool
 	streamID   string
@@ -1277,6 +1282,7 @@ func (l *live) runTurn(streamID, text string, attachments []model.Attachment) {
 			delete(l.perms, id)
 		}
 		l.turnCancel = nil
+		l.lastTurnErr = errMsg
 		steps := append([]model.Step(nil), l.steps...)
 		l.meta.StepCount = len(steps)
 		l.meta.Preview = previewOf(steps)
