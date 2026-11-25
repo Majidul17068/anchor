@@ -27,7 +27,7 @@ export const ModelPicker: React.FC = () => {
         aria-label="Select model"
         value={activeSession.modelId}
         onChange={(e) => updateSession(activeSession.id, { modelId: e.target.value })}
-        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1"
+        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1 min-w-0 max-w-[10rem] truncate"
       >
         {models.map((m) => (
           <option key={m.id} value={m.id} className="bg-[var(--anchor-surface-elevated)] text-[var(--anchor-text)]">

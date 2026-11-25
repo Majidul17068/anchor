@@ -17,7 +17,7 @@ export const ContextChip: React.FC = () => {
   const color = levelColor(1 - frac);
   return (
     <Tooltip side="bottom" content={`Context window: ${fmt(used)} of ${fmt(s.contextSize)} tokens used. Run /compact in the chat to free space.`}>
-      <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-[11px] text-[var(--anchor-text-muted)]">
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-[11px] text-[var(--anchor-text-muted)]">
         <span className="w-8 h-1.5 rounded-full bg-[var(--anchor-surface)] overflow-hidden">
           <span className="block h-full rounded-full" style={{ width: `${Math.max(4, frac * 100)}%`, backgroundColor: color }} />
         </span>

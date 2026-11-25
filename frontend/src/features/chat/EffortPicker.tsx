@@ -22,7 +22,7 @@ export const EffortPicker: React.FC = () => {
         aria-label="Select reasoning effort"
         value={activeSession.effort}
         onChange={(e) => updateSession(activeSession.id, { effort: e.target.value as Effort })}
-        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1"
+        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1 min-w-0 max-w-[9rem] truncate"
       >
         {efforts.map((eff) => (
           <option key={eff.value} value={eff.value} className="bg-[var(--anchor-surface-elevated)] text-[var(--anchor-text)]">

@@ -17,7 +17,7 @@ export const AgentPicker: React.FC = () => {
         aria-label="Select agent"
         value={activeSession.agentId && activeSession.agentId !== 'agent_general' ? activeSession.agentId : ''}
         onChange={(e) => updateSession(activeSession.id, { agentId: e.target.value })}
-        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1"
+        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1 min-w-0 max-w-[10rem] truncate"
       >
         <option value="" className="bg-[var(--anchor-surface-elevated)] text-[var(--anchor-text)]">
           Antigravity default

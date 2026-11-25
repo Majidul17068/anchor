@@ -22,7 +22,7 @@ export const ModePicker: React.FC = () => {
         aria-label="Select execution mode"
         value={activeSession.mode}
         onChange={(e) => updateSession(activeSession.id, { mode: e.target.value as Mode })}
-        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1"
+        className="bg-transparent text-[var(--anchor-text)] text-xs focus:outline-none cursor-pointer pr-1 min-w-0 max-w-[9rem] truncate"
       >
         {modes.map((m) => (
           <option key={m.value} value={m.value} className="bg-[var(--anchor-surface-elevated)] text-[var(--anchor-text)]">

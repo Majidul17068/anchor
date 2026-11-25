@@ -65,9 +65,13 @@ export const ChatPage: React.FC = () => {
         {activeSession ? (
           <>
             {/* Header controls bar */}
-            <div className="h-12 px-3 border-b border-[var(--anchor-border)] bg-[var(--anchor-surface)] flex items-center justify-between gap-2 shrink-0 select-none">
+            {/* The bar wraps instead of overlapping: when the pane is too
+                narrow for one row, the controls drop to a second row (and
+                wrap among themselves on very small windows), while the title
+                truncates and the badges clip inside their own group. */}
+            <div className="min-h-12 px-3 py-1.5 border-b border-[var(--anchor-border)] bg-[var(--anchor-surface)] flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 select-none">
               {/* Left: Editable session title & workspace chip */}
-              <div className="flex items-center gap-2 min-w-0 shrink">
+              <div className="flex items-center gap-2 min-w-[140px] flex-1 overflow-hidden">
                 {isEditingTitle ? (
                   <div className="flex items-center gap-1 min-w-0">
                     <input
@@ -90,9 +94,10 @@ export const ChatPage: React.FC = () => {
                 ) : (
                   <div
                     onClick={() => setIsEditingTitle(true)}
-                    className="flex items-center gap-1.5 cursor-pointer group min-w-0 shrink"
+                    className="flex items-center gap-1.5 cursor-pointer group min-w-[60px] shrink"
+                    title={activeSession.title}
                   >
-                    <h2 className="text-xs font-semibold text-[var(--anchor-text)] truncate max-w-[180px] sm:max-w-[240px]">
+                    <h2 className="text-xs font-semibold text-[var(--anchor-text)] truncate max-w-[240px]">
                       {activeSession.title}
                     </h2>
                     <Edit2 className="w-3 h-3 text-[var(--anchor-text-subtle)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
@@ -103,7 +108,7 @@ export const ChatPage: React.FC = () => {
                 <Badge
                   variant={isParent ? 'warn' : 'info'}
                   size="xs"
-                  className="hidden md:inline-flex"
+                  className="inline-flex shrink-0 whitespace-nowrap"
                 >
                   {isParent ? (
                     <>
@@ -122,7 +127,7 @@ export const ChatPage: React.FC = () => {
                 {activeSession.workspacePaths[0] && (
                   <div
                     title={activeSession.workspacePaths[0]}
-                    className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-[10px] text-[var(--anchor-text-subtle)] font-mono truncate max-w-[150px]"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--anchor-surface-sunken)] border border-[var(--anchor-border)] text-[10px] text-[var(--anchor-text-subtle)] font-mono truncate max-w-[150px] min-w-0 shrink"
                   >
                     <Folder className="w-3 h-3 shrink-0" />
                     <span className="truncate">
@@ -133,7 +138,7 @@ export const ChatPage: React.FC = () => {
               </div>
 
               {/* Right: Agent, Model, Effort, Mode, and Sync Toggle */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1.5 ml-auto min-w-0 max-w-full">
                 <AgentPicker />
                 <ModelPicker />
                 <EffortPicker />
