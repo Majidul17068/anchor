@@ -25,6 +25,9 @@ import type {
   SyncFolderCandidate,
   SyncStatus,
   Usage,
+  LearnStatus,
+  Suggestion,
+  SuggestionEdit,
 } from './types';
 import { createMockBridge } from './mock';
 
@@ -197,6 +200,19 @@ export interface AnchorBridge {
   settings: {
     get(): Promise<Record<string, unknown>>;
     set(patch: Record<string, unknown>): Promise<void>;
+  };
+  /** "Learn from my work": proposals drawn from how the user works; nothing applies until accepted. */
+  learn: {
+    status(): Promise<LearnStatus>;
+    list(): Promise<Suggestion[]>;
+    /** Study recent conversations now; returns the number of new drafts. Spends one agent turn. */
+    run(): Promise<number>;
+    update(id: string, edit: SuggestionEdit): Promise<Suggestion>;
+    accept(id: string, edit?: SuggestionEdit): Promise<Suggestion>;
+    reject(id: string): Promise<void>;
+    /** Erase every draft, decision and the run history. */
+    forget(): Promise<void>;
+    onStatus(cb: (status: LearnStatus) => void): () => void;
   };
 }
 

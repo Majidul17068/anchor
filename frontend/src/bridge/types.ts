@@ -59,6 +59,42 @@ export interface Session {
   contextSize?: number;
 }
 
+/**
+ * One improvement Anchor proposes after studying how you work: a standing
+ * instruction, or a draft skill or agent. It has no effect until accepted.
+ */
+export interface Suggestion {
+  id: string;
+  kind: 'rule' | 'skill' | 'agent';
+  title: string;
+  reason: string;
+  evidence: string[];
+  occurrences: number;
+  status: 'draft' | 'accepted' | 'rejected';
+  createdAt: string;
+  decidedAt?: string;
+  /** The instruction text (kind rule). */
+  rule?: string;
+  /** Skill or agent: its name, when to use it, and its instructions. */
+  name?: string;
+  description?: string;
+  body?: string;
+  tools?: string[];
+  /** Id of the skill or agent created by accepting, for sharing it. */
+  createdId?: string;
+}
+
+/** What may be changed on a draft before approving it. */
+export type SuggestionEdit = Partial<Pick<Suggestion, 'title' | 'rule' | 'name' | 'description' | 'body' | 'tools'>>;
+
+export interface LearnStatus {
+  enabled: boolean;
+  running: boolean;
+  drafts: number;
+  lastRunAt?: string;
+  lastError?: string;
+}
+
 /** One limit of the account: window is "weekly" or "5h". */
 export interface UsageBucket {
   id: string;

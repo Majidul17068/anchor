@@ -19,7 +19,8 @@ import { useAuthStore } from './store/auth';
 import { useSettingsStore } from './store/settings';
 import { useSyncStore } from './store/sync';
 import { useUsageStore } from './store/usage';
-import type { Session } from './bridge/types';
+import { useLearnStore } from './store/learn';
+import type { LearnStatus, Session } from './bridge/types';
 import { useShortcut } from './hooks/useShortcut';
 
 export default function App() {
@@ -103,6 +104,17 @@ export default function App() {
     void useUsageStore.getState().load();
     const t = setInterval(() => void useUsageStore.getState().load(true), 5 * 60_000);
     return () => clearInterval(t);
+  }, [account]);
+
+  // "Learn from my work": keep the count of drafts waiting for review
+  // current everywhere (the Settings icon carries it as a badge).
+  useEffect(() => {
+    if (!account) return;
+    void useLearnStore.getState().load();
+    const off = window.runtime?.EventsOn('learn:status', (raw: unknown) => {
+      useLearnStore.getState().setStatus(raw as LearnStatus);
+    });
+    return () => off?.();
   }, [account]);
 
   // The CLI reports how full the context window is as a chat goes on.

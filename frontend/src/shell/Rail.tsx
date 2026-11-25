@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useSettingsStore } from '../store/settings';
 import { useMarketStore } from '../store/market';
+import { useLearnStore } from '../store/learn';
 import { useTheme } from '../hooks/useTheme';
 import { confirmDialog } from '../store/confirm';
 import { Avatar } from '../components/Avatar';
@@ -35,6 +36,8 @@ export const Rail: React.FC<RailProps> = ({ activeTab, onSelectTab }) => {
   const logout = useAuthStore((s) => s.logout);
   const cliStatus = useSettingsStore((s) => s.cliStatus);
   const updatesCount = useMarketStore((s) => s.updatesAvailable.length);
+  // Suggestions waiting for review ("Learn from my work") live in Settings.
+  const learnDrafts = useLearnStore((s) => s.status?.drafts ?? 0);
   const { isDark, toggleTheme } = useTheme();
 
   // Account menu on the avatar: who is signed in, jump to Settings, sign out.
@@ -113,6 +116,7 @@ export const Rail: React.FC<RailProps> = ({ activeTab, onSelectTab }) => {
       label: 'Settings',
       icon: <Settings className="w-5 h-5" />,
       shortcut: `${modKey}7`,
+      badge: learnDrafts > 0 ? learnDrafts : undefined,
     },
   ];
 

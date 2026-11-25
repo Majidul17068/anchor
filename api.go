@@ -19,6 +19,7 @@ import (
 	"github.com/Majidul17068/anchor/internal/drive"
 	"github.com/Majidul17068/anchor/internal/engine"
 	"github.com/Majidul17068/anchor/internal/folderdrive"
+	"github.com/Majidul17068/anchor/internal/learn"
 	"github.com/Majidul17068/anchor/internal/market"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/paths"
@@ -45,6 +46,7 @@ type API struct {
 	folder *folderdrive.Service
 	sync   *anchorsync.Engine
 	market *market.Service
+	learn  *learn.Service
 
 	sharedMu   sync.Mutex
 	sharedAt   time.Time
@@ -115,12 +117,14 @@ func NewAPI(version string, logger *log.Logger) *API {
 		}
 		return out, err
 	})
+	a.learn = a.newLearn(logf)
 	return a
 }
 
 func (a *API) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.sync.Start()
+	go a.learnLoop()
 	// Warm up in the background so the first screen is fast.
 	go func() {
 		if _, ok := a.loc.Find(); ok && a.eng.AuthStatus() != nil {

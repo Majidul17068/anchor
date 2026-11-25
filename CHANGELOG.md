@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Learn from my work (Settings, off by default). Anchor studies your own
+  messages from recent chats and proposes standing instructions for
+  corrections you repeat, and draft skills or agents for work you repeat.
+  Each proposal shows why, quoting your words, and exactly what it would
+  add; you edit, approve or dismiss it, and nothing changes until you
+  approve. Dismissed ideas are not proposed again. Approved skills and
+  agents are yours and can be shared on the Marketplace from the same card.
+  Studies run on demand or at most once a day; `anchorctl learn` does the
+  same from the terminal.
+- Replies render as real Markdown: tables, rules, nested and numbered
+  lists, checklists.
+- Paste or drop images and files into the composer; pictures show as
+  thumbnails and reach the model as images; a very long paste becomes a
+  text attachment.
+- The chat header wraps instead of overlapping when the window is narrow.
 - Usage limits are visible. A meter in the title bar shows the limit
   closest to running out; clicking it lists, for each model group, how much
   of the weekly and five-hour allowance is left and when it refills, plus

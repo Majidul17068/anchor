@@ -22,6 +22,7 @@ import (
 	"github.com/Majidul17068/anchor/internal/drive"
 	"github.com/Majidul17068/anchor/internal/engine"
 	"github.com/Majidul17068/anchor/internal/folderdrive"
+	"github.com/Majidul17068/anchor/internal/learn"
 	"github.com/Majidul17068/anchor/internal/model"
 	"github.com/Majidul17068/anchor/internal/skills"
 	"github.com/Majidul17068/anchor/internal/store"
@@ -218,6 +219,26 @@ func main() {
 		}
 		if u.Credits != nil {
 			fmt.Printf("AI credits remaining: %.0f\n", u.Credits.Remaining)
+		}
+	case "learn":
+		// Study recent conversations and print what would be suggested.
+		// Drafts are saved for review in the app; nothing is applied.
+		ls := learn.New(st, eng.RunOnce, learn.Hooks{
+			Rules: func() string { s, _ := st.Settings()["agentRules"].(string); return s },
+		}, emit, logf)
+		n, err := ls.Run(context.Background(), true)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("%d new suggestion(s)\n", n)
+		for _, sg := range ls.List() {
+			fmt.Printf("\n[%s] %s  (%s, seen %d×)\n  %s\n", sg.Kind, sg.Title, sg.Status, sg.Occurrences, sg.Reason)
+			if sg.Rule != "" {
+				fmt.Printf("  rule: %s\n", sg.Rule)
+			}
+			if sg.Name != "" {
+				fmt.Printf("  name: %s — %s\n", sg.Name, sg.Description)
+			}
 		}
 	case "version":
 		fmt.Println("anchorctl", Version)

@@ -21,6 +21,9 @@ import type {
   SkillRequest,
   Step,
   SyncStatus,
+  LearnStatus,
+  Suggestion,
+  SuggestionEdit,
 } from './types';
 import { createId } from '../lib/ids';
 
@@ -2228,5 +2231,43 @@ Feel free to ask for additional modifications, tests, or file diffs.`;
         settingsRecord = { ...settingsRecord, ...patch };
       },
     },
+
+    learn: (() => {
+      let items: Suggestion[] = [
+        {
+          id: 'sg_1', kind: 'rule', title: 'Run tests before finishing', status: 'draft', occurrences: 3, createdAt: new Date().toISOString(),
+          reason: 'You reminded the agent to run the test suite before declaring a task done in 3 conversations.',
+          evidence: ['did you run the tests? always run them before finishing', 'run the test suite first'],
+          rule: 'Always run the relevant test suite and verify it passes before reporting that a task is complete.',
+        },
+        {
+          id: 'sg_2', kind: 'skill', title: 'Conventional commit messages', status: 'draft', occurrences: 4, createdAt: new Date().toISOString(),
+          reason: 'You asked for a commit message in the Conventional Commits format in 4 separate conversations.',
+          evidence: ['write the commit message, conventional commits style'],
+          name: 'conventional-commit', description: 'Use when asked to write a git commit message for recent changes.',
+          body: '# Conventional Commit Message\n\n1. Inspect the changes.\n2. Format as `<type>(scope): description`.\n3. Keep the subject under 72 characters.',
+        },
+      ];
+      const status = (): LearnStatus => ({
+        enabled: Boolean(settingsRecord.learnEnabled), running: false, drafts: items.filter((i) => i.status === 'draft').length,
+        lastRunAt: new Date(Date.now() - 3600_000).toISOString(),
+      });
+      return {
+        async status() { return status(); },
+        async list() { return [...items]; },
+        async run() { return 0; },
+        async update(id: string, edit: SuggestionEdit) {
+          items = items.map((i) => (i.id === id ? { ...i, ...edit } : i));
+          return items.find((i) => i.id === id)!;
+        },
+        async accept(id: string, edit?: SuggestionEdit) {
+          items = items.map((i) => (i.id === id ? { ...i, ...edit, status: 'accepted' as const, createdId: i.kind === 'rule' ? undefined : `mock_${i.name}` } : i));
+          return items.find((i) => i.id === id)!;
+        },
+        async reject(id: string) { items = items.map((i) => (i.id === id ? { ...i, status: 'rejected' as const } : i)); },
+        async forget() { items = []; },
+        onStatus() { return () => {}; },
+      };
+    })(),
   };
 }

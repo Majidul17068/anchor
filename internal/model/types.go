@@ -84,6 +84,51 @@ type Session struct {
 	ContextSize int64 `json:"contextSize,omitempty"`
 }
 
+// Suggestion kinds and states (internal/learn).
+const (
+	SuggestionRule  = "rule"
+	SuggestionSkill = "skill"
+	SuggestionAgent = "agent"
+
+	SuggestionDraft    = "draft"
+	SuggestionAccepted = "accepted"
+	SuggestionRejected = "rejected"
+)
+
+// Suggestion is one improvement Anchor proposes after studying how the user
+// works: a standing instruction, or a draft skill or agent. It has no
+// effect until accepted.
+type Suggestion struct {
+	ID          string   `json:"id"`
+	Kind        string   `json:"kind"` // rule | skill | agent
+	Title       string   `json:"title"`
+	Reason      string   `json:"reason"`
+	Evidence    []string `json:"evidence"`
+	Occurrences int      `json:"occurrences"`
+	Status      string   `json:"status"` // draft | accepted | rejected
+	CreatedAt   string   `json:"createdAt"`
+	DecidedAt   string   `json:"decidedAt,omitempty"`
+	// Rule is the instruction text (kind rule).
+	Rule string `json:"rule,omitempty"`
+	// Name, Description, Body and Tools describe a skill or an agent; Body
+	// is the SKILL.md instructions or the agent's instructions.
+	Name        string   `json:"name,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Body        string   `json:"body,omitempty"`
+	Tools       []string `json:"tools,omitempty"`
+	// CreatedID is the skill or agent id made by accepting, for sharing it.
+	CreatedID string `json:"createdId,omitempty"`
+}
+
+// LearnStatus is the state of the learning feature.
+type LearnStatus struct {
+	Enabled   bool   `json:"enabled"`
+	Running   bool   `json:"running"`
+	Drafts    int    `json:"drafts"`
+	LastRunAt string `json:"lastRunAt,omitempty"`
+	LastError string `json:"lastError,omitempty"`
+}
+
 // Usage is the signed-in account's model limits as the CLI reports them.
 type Usage struct {
 	Tier        string        `json:"tier,omitempty"`

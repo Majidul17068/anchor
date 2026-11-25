@@ -28,6 +28,8 @@ import type {
   SyncFolderCandidate,
   SyncStatus,
   Usage,
+  LearnStatus,
+  Suggestion,
 } from './types';
 
 type AnyFn = (...args: unknown[]) => Promise<unknown>;
@@ -268,6 +270,17 @@ export function createWailsBridge(): AnchorBridge {
     settings: {
       get: () => call<Record<string, unknown>>('SettingsGet'),
       set: (patch) => call('SettingsSet', patch),
+    },
+
+    learn: {
+      status: () => call<LearnStatus>('LearnStatus'),
+      list: () => call<Suggestion[]>('LearnSuggestions').then((s) => s ?? []),
+      run: () => call<number>('LearnRun'),
+      update: (id, edit) => call<Suggestion>('LearnUpdate', id, edit),
+      accept: (id, edit) => call<Suggestion>('LearnAccept', id, edit ?? {}),
+      reject: (id) => call('LearnReject', id),
+      forget: () => call('LearnForget'),
+      onStatus: (cb) => window.runtime!.EventsOn('learn:status', (data) => cb(data as LearnStatus)),
     },
   };
 }
