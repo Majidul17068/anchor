@@ -25,7 +25,7 @@ type memDrive struct {
 func newMemDrive() *memDrive {
 	return &memDrive{files: map[string]*drive.File{}, body: map[string][]byte{}}
 }
-func (m *memDrive) Connected() bool                             { return true }
+func (m *memDrive) Connected() bool                            { return true }
 func (m *memDrive) RootFolder(context.Context) (string, error) { return "root", nil }
 func (m *memDrive) PutIn(_ context.Context, parent, name string, props map[string]string, content []byte) (drive.File, error) {
 	m.mu.Lock()
@@ -82,7 +82,10 @@ func newDev(t *testing.T) *dev {
 		SetRulesAt: func(text, at string) error {
 			return st.SetSettings(map[string]any{"agentRules": text, "agentRulesAt": at})
 		},
-		SaveSkill: func(name, _, _ string) (string, error) { d.skills = append(d.skills, name); return "skill_" + name, nil },
+		SaveSkill: func(name, _, _ string) (string, error) {
+			d.skills = append(d.skills, name)
+			return "skill_" + name, nil
+		},
 		SaveAgent: func(name, _, _ string, _ []string) (string, error) {
 			d.agents = append(d.agents, name)
 			return "mine:" + name, nil
